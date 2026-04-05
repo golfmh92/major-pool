@@ -1873,7 +1873,7 @@ function renderLeaderboard() {
               return `<div class="golfer-rd" style="font-size:11px;color:var(--green);font-weight:600;line-height:1.1">${fmtScore(rtp)}<div style="font-size:8px;color:var(--text3);font-weight:400">${g._live.thru}</div>${midBonusBadge}</div>`;
             }
             const bonusBadge = r === 1 && bonus > 0 ? `<div style="font-size:8px;color:var(--gold2);line-height:1;margin-top:2px">★-${bonus}</div>` : '';
-            return `<div class="golfer-rd ${sCls}" style="height:auto;${counting ? 'background:rgba(0,103,71,.08);font-weight:700' : ''}">${sc !== null ? sc : '—'}${bonusBadge}</div>`;
+            return `<div class="golfer-rd ${sCls}" style="height:auto;${counting ? 'border:1.5px solid var(--green);font-weight:700' : ''}">${sc !== null ? sc : '—'}${bonusBadge}</div>`;
           }).join('');
           // Live toPar + thru column
           const liveHtml = g._live
@@ -1905,10 +1905,10 @@ function renderLeaderboard() {
           const golferBonus = rd === 1 ? getGolferBonus(g.id) : 0;
           const golferBonusHtml = golferBonus > 0 ? `<span style="font-size:10px;color:var(--gold2);margin-left:4px">★-${golferBonus}</span>` : '';
           return `<div class="golfer-row ${isCut ? 'cut' : ''}" style="cursor:pointer" onclick="event.stopPropagation();showScorecard('${g.id}')">
-            <div class="golfer-name" style="${counting ? 'color:var(--green);font-weight:600' : ''}">${esc(shortName(g.name))}${golferBonusHtml}</div>
+            <div class="golfer-name">${esc(shortName(g.name))}${golferBonusHtml}</div>
             <div style="display:flex;align-items:center;gap:6px">
               ${thru && hasRoundScore ? `<span style="font-size:10px;color:var(--text3)">${thru}</span>` : ''}
-              ${hasRoundScore ? `<div class="golfer-rd ${sCls}" style="${counting ? 'background:rgba(0,103,71,.08);font-weight:700' : ''}">${fmtScore(rel)}</div>` : ''}
+              ${hasRoundScore ? `<div class="golfer-rd ${sCls}" style="${counting ? 'border:1.5px solid var(--green);font-weight:700' : ''}">${fmtScore(rel)}</div>` : ''}
               ${liveInfo}
               ${!hasRoundScore && !liveInfo ? '<div class="golfer-rd">—</div>' : ''}
             </div>
