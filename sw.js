@@ -1,4 +1,4 @@
-// PGA Pool Test - Service Worker for Push Notifications
+// PGA Pool - Service Worker for Push Notifications
 
 self.addEventListener('push', event => {
   const data = event.data ? event.data.json() : {};
