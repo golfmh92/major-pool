@@ -370,7 +370,46 @@ body::before{content:'';position:fixed;inset:0;background:
 </style>
 </head>
 <body>
-<div id="app">
+<!-- Auth Screen -->
+<div id="authScreen" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:380px">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-family:var(--font-display);font-size:28px;color:var(--green);letter-spacing:3px">PGA POOL</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">Golf Pool mit Freunden</div>
+    </div>
+
+    <!-- Tab Toggle -->
+    <div style="display:flex;background:var(--bg2);border-radius:10px;overflow:hidden;margin-bottom:20px;border:1px solid var(--border)">
+      <button id="authTabLogin" onclick="switchAuthTab('login')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--green);color:#fff;transition:all .15s">Anmelden</button>
+      <button id="authTabRegister" onclick="switchAuthTab('register')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--text2);transition:all .15s">Registrieren</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="authLogin">
+      <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
+      <input class="input" type="password" id="loginPassword" placeholder="Passwort" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
+      <button class="btn btn-primary btn-block" onclick="doAuthLogin()" style="width:100%;padding:14px;font-size:15px">Anmelden</button>
+      <div onclick="doPasswordReset()" style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px;cursor:pointer">Passwort vergessen?</div>
+    </div>
+
+    <!-- Register Form -->
+    <div id="authRegister" style="display:none">
+      <input class="input" type="text" id="registerName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
+      <input class="input" type="email" id="registerEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
+      <input class="input" type="password" id="registerPassword" placeholder="Passwort (min. 6 Zeichen)" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
+      <button class="btn btn-primary btn-block" onclick="doAuthRegister()" style="width:100%;padding:14px;font-size:15px">Konto erstellen</button>
+    </div>
+
+    <!-- Error -->
+    <div id="authError" style="display:none;margin-top:12px;padding:10px 14px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:13px;text-align:center"></div>
+
+    <!-- Skip (Leaderboard ohne Login) -->
+    <div onclick="skipAuth()" style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px;cursor:pointer">Ohne Konto fortfahren (nur Leaderboard)</div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
   <div class="safe-top"></div>
 
   <!-- Header -->
@@ -837,18 +876,102 @@ let S = {
   pgaTestField: [],      // [{name, country, rank}] from ESPN
   fieldLoaded: false,
   // Live ticker
+  // Auth
+  userProfile: null,
+  userId: null,
+  isGuest: false,
 };
 
+/* ===================== Auth ===================== */
+let currentUser = null;
+
+function switchAuthTab(tab) {
+  document.getElementById('authLogin').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('authRegister').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('authTabLogin').style.background = tab === 'login' ? 'var(--green)' : 'transparent';
+  document.getElementById('authTabLogin').style.color = tab === 'login' ? '#fff' : 'var(--text2)';
+  document.getElementById('authTabRegister').style.background = tab === 'register' ? 'var(--green)' : 'transparent';
+  document.getElementById('authTabRegister').style.color = tab === 'register' ? '#fff' : 'var(--text2)';
+  document.getElementById('authError').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = '';
+  el.style.background = 'var(--red-bg)';
+  el.style.color = 'var(--red)';
+}
+
+async function doAuthLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  if (!email || !pass) { showAuthError('Bitte E-Mail und Passwort eingeben'); return; }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { showAuthError(error.message); return; }
+  await onAuthSuccess(data.user);
+}
+
+async function doAuthRegister() {
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const pass = document.getElementById('registerPassword').value;
+  if (!name || !email || !pass) { showAuthError('Bitte alle Felder ausfüllen'); return; }
+  if (pass.length < 6) { showAuthError('Passwort muss mindestens 6 Zeichen haben'); return; }
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if (error) { showAuthError(error.message); return; }
+  // Create user profile
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  await sb.from('users').insert({ id: data.user.id, name, email, avatar_initials: initials });
+  await onAuthSuccess(data.user);
+}
+
+async function onAuthSuccess(user) {
+  currentUser = user;
+  S.userId = user.id;
+  S.isGuest = false;
+  // Load user profile
+  const { data: profile } = await sb.from('users').select('*').eq('id', user.id).single();
+  S.userProfile = profile;
+  // Set admin (keep existing admin logic)
+  setAdmin(true, user.id);
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  await initApp();
+}
+
+async function doPasswordReset() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { showAuthError('Bitte E-Mail eingeben'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email);
+  if (error) { showAuthError(error.message); return; }
+  const el = document.getElementById('authError');
+  el.textContent = 'Password-Reset E-Mail gesendet!';
+  el.style.display = '';
+  el.style.background = 'rgba(27,58,92,.08)';
+  el.style.color = 'var(--green)';
+}
+
+function skipAuth() {
+  currentUser = null;
+  S.userProfile = null;
+  S.userId = null;
+  S.isGuest = true;
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  initApp();
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  S.userProfile = null;
+  S.userId = null;
+  location.reload();
+}
+
 /* ===================== Init ===================== */
-async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    setAdmin(true, session.user.id);
-  } else {
-    // Auto-login for testing
-    const { data, error } = await sb.auth.signInWithPassword({ email: 'habeler.markus@gmail.com', password: 'Golfer97!' });
-    if (!error && data.user) setAdmin(true, data.user.id);
-  }
+async function initApp() {
   // Restore identity from localStorage
   S.myName = localStorage.getItem('pga_test_identity') || '';
   // Restore favorites
@@ -3225,7 +3348,16 @@ if (isRunningStandalone()) {
 }
 
 /* ===================== Start ===================== */
-init().then(() => {
+(async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await onAuthSuccess(session.user);
+  } else {
+    // Show auth screen
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+  // Post-init tasks (run after app is visible)
   startLiveRefresh();
   initServiceWorker();
   S.pushEnabled = localStorage.getItem('pga_test_push') === 'true';
@@ -3237,7 +3369,7 @@ init().then(() => {
   } else if (!hasSeenTutorial()) {
     setTimeout(showTutorial, 800);
   }
-});
+})();
 </script>
 </body>
 </html>
