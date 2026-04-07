@@ -923,6 +923,7 @@ let S = {
   poolPicks: [],
   poolScores: [],
   poolBonuses: [],
+  draftModalOpen: false,
 };
 
 /* ===================== Auth ===================== */
@@ -1155,6 +1156,57 @@ function renderProfile() {
   c.innerHTML = html;
 }
 
+/* ===================== Snake Draft ===================== */
+function getCurrentDrafter() {
+  if (!S.activePool || !S.poolMembers.length) return null;
+  const totalPicks = S.poolPicks.length;
+  const memberCount = S.poolMembers.length;
+  const round = Math.floor(totalPicks / memberCount) + 1;
+  const positionInRound = totalPicks % memberCount;
+  const reversed = round % 2 === 0;
+  const sorted = [...S.poolMembers].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
+  const order = reversed ? [...sorted].reverse() : sorted;
+  return { member: order[positionInRound], round, pickInRound: positionInRound + 1 };
+}
+
+function isMyTurn() {
+  const current = getCurrentDrafter();
+  return current && current.member && current.member.user_id === S.userId;
+}
+
+/* ===================== Realtime ===================== */
+let _draftChannel = null;
+
+function subscribeDraftRealtime() {
+  if (!S.activePool) return;
+  if (_draftChannel) sb.removeChannel(_draftChannel);
+
+  _draftChannel = sb.channel('draft-' + S.activePool.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'pool_picks',
+      filter: `pool_id=eq.${S.activePool.id}`
+    }, async (payload) => {
+      // Skip wenn der Pick von uns selbst kommt (haben ihn schon lokal)
+      if (S.poolPicks.some(p => p.id === payload.new.id)) return;
+      S.poolPicks.push(payload.new);
+      // Member lookup für Toast
+      const member = S.poolMembers.find(m => m.user_id === payload.new.user_id);
+      const memberName = member?.users?.name || 'Jemand';
+      showToast(`${memberName} hat ${payload.new.golfer_name} gedraftet`);
+      render();
+    })
+    .subscribe();
+}
+
+function unsubscribeDraftRealtime() {
+  if (_draftChannel) {
+    sb.removeChannel(_draftChannel);
+    _draftChannel = null;
+  }
+}
+
 /* ===================== Init ===================== */
 async function initApp() {
   S.myName = localStorage.getItem('pga_test_identity') || '';
@@ -1170,7 +1222,10 @@ async function initApp() {
       window.history.replaceState({}, '', location.pathname);
     }
     await loadActivePool();
-    if (S.activePool) await loadPoolData();
+    if (S.activePool) {
+      await loadPoolData();
+      subscribeDraftRealtime();
+    }
     // Set myName from profile if not set
     if (!S.myName && S.userProfile) {
       S.myName = S.userProfile.name;
@@ -2280,6 +2335,7 @@ function renderLeaderboard() {
 }
 
 function renderDraft() {
+  if (S.draftModalOpen) return;
   const c = document.getElementById('adminDraftContent');
   let html = '';
 
@@ -2429,6 +2485,7 @@ async function randomizeDraftOrder() {
 }
 
 function openDraftPickModal() {
+  S.draftModalOpen = true;
   const sel = document.getElementById('selectDraftTeam');
   sel.innerHTML = S.participants
     .sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99))
@@ -2849,11 +2906,15 @@ function openModal(id) {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  if (id === 'modalDraftPick') S.draftModalOpen = false;
 }
 // Close modals on backdrop click + prevent background scroll
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('open');
+    if (e.target === overlay) {
+      overlay.classList.remove('open');
+      if (overlay.id === 'modalDraftPick') S.draftModalOpen = false;
+    }
   });
   overlay.addEventListener('touchmove', e => {
     if (!e.target.closest('.modal')) e.preventDefault();
