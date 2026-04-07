@@ -1156,6 +1156,180 @@ function renderProfile() {
   c.innerHTML = html;
 }
 
+/* ===================== Pool Scoring ===================== */
+function getPoolGolferScore(golferName, round) {
+  if (!S.activePool) return null;
+  const pid = S.activePool.id;
+  const manual = S.poolScores.find(x => x.pool_id === pid && x.golfer_name === golferName && x.round === round && x.score > 0);
+  if (manual) return manual.score;
+  // Fallback: ESPN live (über matchGolferToLive)
+  const live = matchGolferToLive(golferName);
+  if (live) {
+    const r = live['r' + round];
+    if (r) return r;
+  }
+  return null;
+}
+
+function getPoolGolferStatus(golferName) {
+  if (!S.activePool) return 'active';
+  const pid = S.activePool.id;
+  const dq = S.poolScores.some(s => s.pool_id === pid && s.golfer_name === golferName && s.score === -1);
+  if (dq) return 'dq';
+  const wd = S.poolScores.some(s => s.pool_id === pid && s.golfer_name === golferName && s.score === -2);
+  if (wd) return 'wd';
+  const live = matchGolferToLive(golferName);
+  if (live && live.status === 'cut') return 'cut';
+  return 'active';
+}
+
+function getPoolGolferBonus(golferName) {
+  if (!S.activePool) return 0;
+  const pid = S.activePool.id;
+  return S.poolBonuses
+    .filter(b => b.pool_id === pid && b.golfer_name === golferName)
+    .reduce((sum, b) => sum + (b.shots || 0), 0);
+}
+
+function calcPoolTeamRoundScore(userId, round) {
+  if (!S.activePool) return null;
+  const pid = S.activePool.id;
+  const par = S.activePool.par || 72;
+  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  const count = (round <= 2) ? 4 : 3;
+  const roundScores = [];
+  for (const p of userPicks) {
+    const status = getPoolGolferStatus(p.golfer_name);
+    if (status === 'wd' || status === 'dq') continue;
+    if (round >= 3 && status === 'cut') continue;
+    const sc = getPoolGolferScore(p.golfer_name, round);
+    let toPar = null;
+    if (sc !== null) {
+      toPar = sc - par;
+    } else {
+      const live = matchGolferToLive(p.golfer_name);
+      if (live && live.currentRound === round && !live.finished) {
+        const rtp = live['r' + round + '_toPar'];
+        if (rtp !== undefined && rtp !== null) toPar = rtp;
+      }
+    }
+    if (toPar !== null) {
+      const bonus = round === 1 ? getPoolGolferBonus(p.golfer_name) : 0;
+      roundScores.push(toPar - bonus);
+    }
+  }
+  if (roundScores.length === 0) return null;
+  roundScores.sort((a, b) => a - b);
+  return roundScores.slice(0, count).reduce((a, b) => a + b, 0);
+}
+
+function calcPoolTeamTotal(userId) {
+  let total = 0;
+  let hasAny = false;
+  for (let r = 1; r <= 4; r++) {
+    const rs = calcPoolTeamRoundScore(userId, r);
+    if (rs !== null) { total += rs; hasAny = true; }
+  }
+  return hasAny ? total : null;
+}
+
+function isPoolGolferOut(golferName) {
+  const s = getPoolGolferStatus(golferName);
+  return s === 'wd' || s === 'dq' || s === 'cut';
+}
+
+function isPoolTeamEliminated(userId) {
+  if (!S.activePool) return false;
+  const pid = S.activePool.id;
+  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  const out = userPicks.filter(p => isPoolGolferOut(p.golfer_name)).length;
+  return out > 2;
+}
+
+function getPoolTeamBonusTotal(userId) {
+  if (!S.activePool) return 0;
+  const pid = S.activePool.id;
+  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  let total = 0;
+  for (const p of userPicks) {
+    if (isPoolGolferOut(p.golfer_name)) continue;
+    total += getPoolGolferBonus(p.golfer_name);
+  }
+  return total;
+}
+
+function getPoolRanking() {
+  if (!S.activePool) return [];
+  const teams = S.poolMembers.map(m => {
+    const eliminated = isPoolTeamEliminated(m.user_id);
+    const rounds = [1,2,3,4].map(r => calcPoolTeamRoundScore(m.user_id, r));
+    let total = null;
+    let hasAny = false;
+    for (const rs of rounds) {
+      if (rs !== null) { total = (total || 0) + rs; hasAny = true; }
+    }
+    return {
+      user_id: m.user_id,
+      name: m.users?.name || 'Unknown',
+      total: hasAny ? total : null,
+      bonus: getPoolTeamBonusTotal(m.user_id),
+      rounds,
+      isEliminated: eliminated
+    };
+  });
+  teams.sort((a, b) => {
+    if (a.isEliminated !== b.isEliminated) return a.isEliminated ? 1 : -1;
+    if (a.total === null && b.total === null) return 0;
+    if (a.total === null) return 1;
+    if (b.total === null) return -1;
+    return a.total - b.total;
+  });
+  return teams;
+}
+
+function buildPoolSnapshot() {
+  if (!S.activePool) return null;
+  const pool = S.activePool;
+  const ranking = getPoolRanking();
+  const teams = S.poolMembers.map(m => {
+    const picks = S.poolPicks
+      .filter(p => p.user_id === m.user_id)
+      .sort((a, b) => a.draft_round - b.draft_round || a.draft_pick - b.draft_pick);
+    return {
+      user_id: m.user_id,
+      name: m.users?.name || 'Unknown',
+      golfers: picks.map(p => ({
+        name: p.golfer_name,
+        round: p.draft_round,
+        pick: p.draft_pick,
+        scores: [1,2,3,4].map(r => getPoolGolferScore(p.golfer_name, r)),
+        bonus: getPoolGolferBonus(p.golfer_name),
+        status: getPoolGolferStatus(p.golfer_name)
+      }))
+    };
+  });
+  const pot = S.poolMembers.length * (pool.entry_fee || 0);
+  const payouts = [
+    { rank: 1, amount: Math.round(pot * 0.6 * 100) / 100 },
+    { rank: 2, amount: Math.round(pot * 0.3 * 100) / 100 },
+    { rank: 3, amount: Math.round(pot * 0.1 * 100) / 100 }
+  ];
+  return {
+    pool_id: pool.id,
+    name: pool.name,
+    tournament: pool.tournament_name,
+    par: pool.par,
+    cut_top: pool.cut_top,
+    entry_fee: pool.entry_fee,
+    participants: S.poolMembers.length,
+    pot,
+    ranking,
+    teams,
+    payouts,
+    finished_at: new Date().toISOString()
+  };
+}
+
 /* ===================== Snake Draft ===================== */
 function getCurrentDrafter() {
   if (!S.activePool || !S.poolMembers.length) return null;
