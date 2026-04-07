@@ -504,7 +504,7 @@ function renderFieldPanelList() {
   const searchEl = document.getElementById('fieldPanelSearch');
   const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
   const drafted = new Set(S.golfers.map(g => g.name.toLowerCase().trim()));
-  let players = S.field;
+  let players = S.field.filter(p => !drafted.has(p.name.toLowerCase().trim()));
   if (q) players = players.filter(p => p.name.toLowerCase().includes(q));
 
   const list = document.getElementById('fieldPanelList');

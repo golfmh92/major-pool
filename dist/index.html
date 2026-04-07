@@ -1182,6 +1182,10 @@ async function initApp() {
   updateIdentityBar();
   updateTabs();
   render();
+  // Default tab: leaderboard wenn kein Pool
+  if (!S.activePool) {
+    switchTab('leaderboard');
+  }
 }
 
 function setIdentity(name) {
@@ -2525,10 +2529,6 @@ async function removeBonus(id) {
 function renderTournament() {
   const list = document.getElementById('tournamentList');
   if (!list) return;
-  if (new Date() < TOURNAMENT_START) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">&#9971;</div><h3>Turnier beginnt am Do, 2. April</h3><p>Ab Donnerstag werden hier die Live-Scores der Valero Texas Open angezeigt.</p></div>';
-    return;
-  }
   let entries = Object.entries(S.liveScores);
   // Fallback: if no ESPN data but frozen scores exist, build leaderboard from Supabase data
   if (entries.length === 0 && S.scores.length > 0 && localStorage.getItem('pga_test_frozen')) {
@@ -2959,7 +2959,7 @@ function getAvailableField() {
 function filterFieldList() {
   const query = document.getElementById('inputGolferSearch').value.toLowerCase().trim();
   const list = document.getElementById('fieldList');
-  const available = getAvailableField();
+  const available = getAvailableField().filter(p => !p.isDrafted);
   const selected = document.getElementById('inputGolferName').value;
 
   let filtered = available;
@@ -2968,7 +2968,6 @@ function filterFieldList() {
   }
 
   if (filtered.length === 0 && query) {
-    // Allow manual entry if not found in field
     list.innerHTML = `<div class="field-item" onclick="selectFieldPlayer('${esc(query)}',this)"
       style="font-style:italic;color:var(--text2)">"${esc(query)}" manuell eingeben</div>`;
     return;
@@ -2976,11 +2975,12 @@ function filterFieldList() {
 
   list.innerHTML = filtered.map(p => {
     const sel = normalizeName(p.name) === normalizeName(selected) ? 'selected' : '';
-    const dr = p.isDrafted ? 'drafted' : '';
+    const isAmateur = /\(a\)\s*$/.test(p.name);
+    const cleanName = p.name.replace(/\s*\(a\)\s*$/, '');
     const flag = p.country ? `<span class="field-status">${p.country}</span>` : '';
-    const draftLabel = p.isDrafted ? '<span class="field-status">bereits gedraftet</span>' : '';
-    return `<div class="field-item ${sel} ${dr}" onclick="selectFieldPlayer('${esc(p.name)}',this)">
-      ${esc(p.name)}${flag}${draftLabel}</div>`;
+    const aBadge = isAmateur ? ' <span style="font-size:10px;color:var(--text3)">(a)</span>' : '';
+    return `<div class="field-item ${sel}" onclick="selectFieldPlayer('${esc(p.name)}',this)">
+      ${esc(cleanName)}${aBadge}${flag}</div>`;
   }).join('');
 }
 
@@ -3044,7 +3044,6 @@ function matchGolferToLive(golferName) {
 }
 
 async function fetchLiveScores() {
-  if (new Date() < TOURNAMENT_START) { updateLiveBadge(false); return; }
   try {
     const resp = await fetch(ESPN_GOLF_URL);
     if (!resp.ok) return;
