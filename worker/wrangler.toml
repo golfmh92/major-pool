@@ -2,8 +2,9 @@ name = "pga-pool-push"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-[triggers]
-crons = ["*/2 * * * *"]
+# Cron paused during Masters week to save KV reads (shared ESPN PGA URL).
+# [triggers]
+# crons = ["*/2 * * * *"]
 
 [[kv_namespaces]]
 binding = "KV"

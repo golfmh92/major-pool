@@ -415,7 +415,7 @@ body::before{content:'';position:fixed;inset:0;background:
 
   <!-- Header -->
   <div class="app-header">
-    <div class="header-avatar" id="avatarBtn" onclick="toggleIdentityDropdown()">
+    <div class="header-avatar" id="avatarBtn" style="display:none">
       <span id="avatarText">?</span>
     </div>
     <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">PGA POOL</div>
@@ -431,36 +431,24 @@ body::before{content:'';position:fixed;inset:0;background:
   <!-- Views -->
   <div class="views">
 
-    <!-- LEADERBOARD -->
+    <!-- RANGLISTE (Pool-Ranking) -->
+    <div class="view" id="viewRangliste">
+      <div id="ranglisteContent"></div>
+    </div>
+
+    <!-- LEADERBOARD (Turnier Live) -->
     <div class="view active" id="viewLeaderboard">
-      <div id="meineGolferSection"></div>
-      <div style="position:relative;margin-bottom:12px">
-        <input class="input" type="text" id="lbFilter" placeholder="Mitspieler suchen..." oninput="renderLeaderboard()" style="width:100%;display:block;padding-right:36px">
-        <div id="lbFilterClear" onclick="document.getElementById('lbFilter').value='';document.getElementById('lbFilter').blur();renderLeaderboard()" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:var(--bg3);color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;align-items:center;justify-content:center">×</div>
-      </div>
-      <div class="round-tabs" id="lbRoundTabs"></div>
-      <div id="leaderboardList"></div>
+      <div id="leaderboardContent"></div>
     </div>
 
-    <!-- TOURNAMENT LEADERBOARD -->
-    <div class="view" id="viewTournament">
-      <div style="position:relative;margin-bottom:12px">
-        <input class="input" type="text" id="tournamentFilter" placeholder="Spieler suchen..." oninput="renderTournament()" style="width:100%;display:block;padding-right:36px">
-        <div id="tournamentFilterClear" onclick="document.getElementById('tournamentFilter').value='';document.getElementById('tournamentFilter').blur();renderTournament()" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:var(--bg3);color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;align-items:center;justify-content:center">×</div>
-      </div>
-      <div id="tournamentList"></div>
+    <!-- DRAFT -->
+    <div class="view" id="viewDraft">
+      <div id="draftContent"></div>
     </div>
 
-    <!-- ADMIN (Draft + Spieler-Status + Bonus) -->
+    <!-- ADMIN (Pool-Verwaltung) -->
     <div class="view" id="viewAdmin">
-      <div class="round-tabs" id="adminTabs" style="margin-bottom:12px">
-        <button class="round-tab active" onclick="setAdminTab('draft')">Draft</button>
-        <button class="round-tab" onclick="setAdminTab('status')">Spieler</button>
-        <button class="round-tab" onclick="setAdminTab('bonus')">Bonus</button>
-      </div>
-      <div id="adminDraftContent"></div>
-      <div id="adminStatusContent" style="display:none"></div>
-      <div id="adminBonusContent" style="display:none"></div>
+      <div id="adminContent"></div>
     </div>
 
     <!-- STATS -->
@@ -470,7 +458,7 @@ body::before{content:'';position:fixed;inset:0;background:
 
     <!-- PAYOUTS -->
     <div class="view" id="viewPayouts">
-      <div id="payoutsViewContent"></div>
+      <div id="payoutsContent"></div>
     </div>
 
     <!-- RULES -->
@@ -517,19 +505,23 @@ body::before{content:'';position:fixed;inset:0;background:
 
   <!-- Tab Bar -->
   <nav class="tab-bar">
-    <button class="tab active" data-tab="leaderboard" onclick="switchTab('leaderboard')">
+    <button class="tab hidden" data-tab="rangliste" onclick="switchTab('rangliste')">
       <svg viewBox="0 0 24 24"><path d="M8 21h8m-4-4v4M6 3h12l-1.5 6.5a2 2 0 01-2 1.5h-5a2 2 0 01-2-1.5L6 3z"/><circle cx="12" cy="13" r="2"/></svg>
       <span>Rangliste</span>
     </button>
-    <button class="tab" data-tab="tournament" onclick="switchTab('tournament')">
-      <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z" fill="none" stroke="currentColor" stroke-width="0"/><path d="M16 3l5 5-11 11-5-1 1-5L16 3z"/><path d="M14 7l3 3"/></svg>
+    <button class="tab active" data-tab="leaderboard" onclick="switchTab('leaderboard')">
+      <svg viewBox="0 0 24 24"><path d="M16 3l5 5-11 11-5-1 1-5L16 3z"/><path d="M14 7l3 3"/></svg>
       <span>Leaderboard</span>
     </button>
-    <button class="tab" data-tab="payouts" onclick="switchTab('payouts')">
+    <button class="tab hidden" data-tab="draft" id="tabDraft" onclick="switchTab('draft')">
+      <svg viewBox="0 0 24 24"><path d="M12 4v16m-8-8h16"/></svg>
+      <span>Draft</span>
+    </button>
+    <button class="tab hidden" data-tab="payouts" onclick="switchTab('payouts')">
       <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
       <span>Payouts</span>
     </button>
-    <button class="tab" data-tab="stats" onclick="switchTab('stats')">
+    <button class="tab hidden" data-tab="stats" onclick="switchTab('stats')">
       <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
       <span>Stats</span>
     </button>
@@ -781,34 +773,19 @@ body::before{content:'';position:fixed;inset:0;background:
   </div>
 </div>
 
-<!-- Add Draft Pick Modal -->
+<!-- Draft Pick Modal -->
 <div class="modal-overlay" id="modalDraftPick">
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Draft Pick</h2>
+    <div id="draftPickContext" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
     <div class="form-group">
-      <label>Wer ist dran?</label>
-      <select class="input" id="selectDraftTeam"></select>
-    </div>
-    <div class="form-group">
-      <label>Golfer ausw&auml;hlen</label>
-      <input class="input" type="text" id="inputGolferSearch" placeholder="Suchen..." oninput="filterFieldList()">
-      <div id="fieldList" style="max-height:200px;overflow-y:auto;margin-top:8px;border-radius:var(--radius-sm);border:1px solid var(--border)"></div>
-      <input type="hidden" id="inputGolferName">
-    </div>
-    <div class="form-group">
-      <label>Draft Runde</label>
-      <select class="input" id="selectDraftRound">
-        <option value="1">Runde 1</option>
-        <option value="2">Runde 2</option>
-        <option value="3">Runde 3</option>
-        <option value="4">Runde 4</option>
-        <option value="5">Runde 5</option>
-      </select>
+      <label>Golfer-Name</label>
+      <input class="input" type="text" id="inputGolferName" placeholder="z.B. Scottie Scheffler" autocomplete="off">
     </div>
     <div class="actions">
       <button class="btn btn-secondary" onclick="closeModal('modalDraftPick')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="addDraftPick()">Picken</button>
+      <button class="btn btn-primary" onclick="addPoolPick()">Picken</button>
     </div>
   </div>
 </div>
@@ -1119,15 +1096,20 @@ async function loadPoolData() {
 
 function updateTabs() {
   const hasPool = !!S.activePool;
+  const poolStatus = S.activePool?.status;
+  const inDraft = hasPool && poolStatus === 'draft';
+  const inActive = hasPool && poolStatus === 'active';
   const isPoolAdmin = hasPool && S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
   const isGuest = S.isGuest;
 
   const tabConfig = {
-    leaderboard: true,
-    stats: true,
-    profile: !isGuest,
+    rangliste: hasPool,
+    leaderboard: hasPool,
+    draft: inDraft,
     payouts: hasPool,
+    stats: hasPool,
     admin: hasPool && isPoolAdmin,
+    profile: !isGuest,
     rules: hasPool
   };
 
@@ -1257,10 +1239,10 @@ function getPoolGolferScore(golferName, round) {
   const pid = S.activePool.id;
   const manual = S.poolScores.find(x => x.pool_id === pid && x.golfer_name === golferName && x.round === round && x.score > 0);
   if (manual) return manual.score;
-  // Fallback: ESPN live (über matchGolferToLive)
-  const live = matchGolferToLive(golferName);
-  if (live) {
-    const r = live['r' + round];
+  // Fallback: tournament_golfers (Phase 2 ESPN-Worker)
+  const tg = S.tournamentGolfers.find(g => g.name === golferName);
+  if (tg) {
+    const r = tg['round' + round];
     if (r) return r;
   }
   return null;
@@ -1273,8 +1255,8 @@ function getPoolGolferStatus(golferName) {
   if (dq) return 'dq';
   const wd = S.poolScores.some(s => s.pool_id === pid && s.golfer_name === golferName && s.score === -2);
   if (wd) return 'wd';
-  const live = matchGolferToLive(golferName);
-  if (live && live.status === 'cut') return 'cut';
+  const tg = S.tournamentGolfers.find(g => g.name === golferName);
+  if (tg && tg.status && tg.status !== 'active') return tg.status;
   return 'active';
 }
 
@@ -1286,11 +1268,10 @@ function getPoolGolferBonus(golferName) {
     .reduce((sum, b) => sum + (b.shots || 0), 0);
 }
 
-function calcPoolTeamRoundScore(userId, round) {
+function calcPoolTeamRoundScore(memberId, round) {
   if (!S.activePool) return null;
-  const pid = S.activePool.id;
   const par = S.activePool.par || 72;
-  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  const userPicks = S.poolPicks.filter(p => p.member_id === memberId);
   const count = (round <= 2) ? 4 : 3;
   const roundScores = [];
   for (const p of userPicks) {
@@ -1298,17 +1279,8 @@ function calcPoolTeamRoundScore(userId, round) {
     if (status === 'wd' || status === 'dq') continue;
     if (round >= 3 && status === 'cut') continue;
     const sc = getPoolGolferScore(p.golfer_name, round);
-    let toPar = null;
     if (sc !== null) {
-      toPar = sc - par;
-    } else {
-      const live = matchGolferToLive(p.golfer_name);
-      if (live && live.currentRound === round && !live.finished) {
-        const rtp = live['r' + round + '_toPar'];
-        if (rtp !== undefined && rtp !== null) toPar = rtp;
-      }
-    }
-    if (toPar !== null) {
+      const toPar = sc - par;
       const bonus = round === 1 ? getPoolGolferBonus(p.golfer_name) : 0;
       roundScores.push(toPar - bonus);
     }
@@ -1318,11 +1290,11 @@ function calcPoolTeamRoundScore(userId, round) {
   return roundScores.slice(0, count).reduce((a, b) => a + b, 0);
 }
 
-function calcPoolTeamTotal(userId) {
+function calcPoolTeamTotal(memberId) {
   let total = 0;
   let hasAny = false;
   for (let r = 1; r <= 4; r++) {
-    const rs = calcPoolTeamRoundScore(userId, r);
+    const rs = calcPoolTeamRoundScore(memberId, r);
     if (rs !== null) { total += rs; hasAny = true; }
   }
   return hasAny ? total : null;
@@ -1333,18 +1305,16 @@ function isPoolGolferOut(golferName) {
   return s === 'wd' || s === 'dq' || s === 'cut';
 }
 
-function isPoolTeamEliminated(userId) {
+function isPoolTeamEliminated(memberId) {
   if (!S.activePool) return false;
-  const pid = S.activePool.id;
-  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  const userPicks = S.poolPicks.filter(p => p.member_id === memberId);
   const out = userPicks.filter(p => isPoolGolferOut(p.golfer_name)).length;
   return out > 2;
 }
 
-function getPoolTeamBonusTotal(userId) {
+function getPoolTeamBonusTotal(memberId) {
   if (!S.activePool) return 0;
-  const pid = S.activePool.id;
-  const userPicks = S.poolPicks.filter(p => p.pool_id === pid && p.user_id === userId);
+  const userPicks = S.poolPicks.filter(p => p.member_id === memberId);
   let total = 0;
   for (const p of userPicks) {
     if (isPoolGolferOut(p.golfer_name)) continue;
@@ -1356,18 +1326,19 @@ function getPoolTeamBonusTotal(userId) {
 function getPoolRanking() {
   if (!S.activePool) return [];
   const teams = S.poolMembers.map(m => {
-    const eliminated = isPoolTeamEliminated(m.user_id);
-    const rounds = [1,2,3,4].map(r => calcPoolTeamRoundScore(m.user_id, r));
+    const eliminated = isPoolTeamEliminated(m.id);
+    const rounds = [1,2,3,4].map(r => calcPoolTeamRoundScore(m.id, r));
     let total = null;
     let hasAny = false;
     for (const rs of rounds) {
       if (rs !== null) { total = (total || 0) + rs; hasAny = true; }
     }
     return {
+      member_id: m.id,
       user_id: m.user_id,
-      name: m.users?.name || 'Unknown',
+      name: memberName(m),
       total: hasAny ? total : null,
-      bonus: getPoolTeamBonusTotal(m.user_id),
+      bonus: getPoolTeamBonusTotal(m.id),
       rounds,
       isEliminated: eliminated
     };
@@ -1388,11 +1359,12 @@ function buildPoolSnapshot() {
   const ranking = getPoolRanking();
   const teams = S.poolMembers.map(m => {
     const picks = S.poolPicks
-      .filter(p => p.user_id === m.user_id)
+      .filter(p => p.member_id === m.id)
       .sort((a, b) => a.draft_round - b.draft_round || a.draft_pick - b.draft_pick);
     return {
+      member_id: m.id,
       user_id: m.user_id,
-      name: m.users?.name || 'Unknown',
+      name: memberName(m),
       golfers: picks.map(p => ({
         name: p.golfer_name,
         round: p.draft_round,
@@ -1511,7 +1483,14 @@ function getCurrentDrafter() {
 
 function isMyTurn() {
   const current = getCurrentDrafter();
-  return current && current.member && current.member.user_id === S.userId;
+  if (!current || !current.member) return false;
+  // Eigener Pick
+  if (current.member.user_id === S.userId) return true;
+  // Admin pickt für Platzhalter
+  if (current.member.is_placeholder) {
+    return S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  }
+  return false;
 }
 
 /* ===================== Realtime ===================== */
@@ -1528,13 +1507,10 @@ function subscribeDraftRealtime() {
       table: 'pool_picks',
       filter: `pool_id=eq.${S.activePool.id}`
     }, async (payload) => {
-      // Skip wenn der Pick von uns selbst kommt (haben ihn schon lokal)
       if (S.poolPicks.some(p => p.id === payload.new.id)) return;
       S.poolPicks.push(payload.new);
-      // Member lookup für Toast
-      const member = S.poolMembers.find(m => m.user_id === payload.new.user_id);
-      const memberName = member?.users?.name || 'Jemand';
-      showToast(`${memberName} hat ${payload.new.golfer_name} gedraftet`);
+      const member = S.poolMembers.find(m => m.id === payload.new.member_id);
+      showToast(`${memberName(member)} hat ${payload.new.golfer_name} gedraftet`);
       render();
     })
     .subscribe();
@@ -1549,12 +1525,8 @@ function unsubscribeDraftRealtime() {
 
 /* ===================== Init ===================== */
 async function initApp() {
-  S.myName = localStorage.getItem('pga_test_identity') || '';
-  try { S.favorites = new Set(JSON.parse(localStorage.getItem('pga_test_favs') || '[]')); } catch(e) { S.favorites = new Set(); }
-
   // Pool laden wenn eingeloggt
   if (!S.isGuest && S.userId) {
-    // Check invite code from URL
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('pool');
     if (inviteCode) {
@@ -1564,233 +1536,29 @@ async function initApp() {
     await loadActivePool();
     if (S.activePool) {
       await loadPoolData();
+      await loadTournament();
       subscribeDraftRealtime();
     }
-    // Set myName from profile if not set
-    if (!S.myName && S.userProfile) {
-      S.myName = S.userProfile.name;
-      localStorage.setItem('pga_test_identity', S.myName);
-    }
   }
 
-  await loadAll();
-  updateIdentityBar();
   updateTabs();
-  render();
-  // Default tab: leaderboard wenn kein Pool
-  if (!S.activePool) {
-    switchTab('leaderboard');
+  // Default-Tab: leaderboard wenn Pool, sonst profil
+  const defaultTab = S.activePool ? 'leaderboard' : (S.isGuest ? 'leaderboard' : 'profile');
+  switchTab(defaultTab);
+}
+
+async function loadTournament() {
+  if (!S.activePool || !S.activePool.tournament_id) {
+    S.tournament = null;
+    S.tournamentGolfers = [];
+    return;
   }
-}
-
-function setIdentity(name) {
-  S.myName = name;
-  if (name) localStorage.setItem('pga_test_identity', name);
-  else localStorage.removeItem('pga_test_identity');
-  closeIdentityDropdown();
-  render();
-}
-
-function updateIdentityBar() {
-  const btn = document.getElementById('avatarBtn');
-  const txt = document.getElementById('avatarText');
-  if (S.myName) {
-    const initials = S.myName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    txt.textContent = initials || '?';
-    btn.classList.add('set');
-  } else {
-    txt.textContent = '?';
-    btn.classList.remove('set');
-  }
-  updatePushUI();
-}
-
-function toggleIdentityDropdown() {
-  const dd = document.getElementById('identityDropdown');
-  if (dd.classList.contains('open')) { closeIdentityDropdown(); return; }
-  const sorted = [...S.participants].sort((a, b) => a.name.localeCompare(b.name));
-  dd.innerHTML = `<div class="id-option none" onclick="setIdentity('')">Niemand (zurücksetzen)</div>` +
-    sorted.map(p =>
-      `<div class="id-option${p.name === S.myName ? ' active' : ''}" onclick="setIdentity('${esc(p.name)}')">${esc(p.name)}</div>`
-    ).join('');
-  dd.classList.add('open');
-  // Close on outside click
-  setTimeout(() => document.addEventListener('click', closeIdentityOnOutside, { once: true }), 10);
-}
-
-function closeIdentityDropdown() {
-  document.getElementById('identityDropdown').classList.remove('open');
-}
-
-function closeIdentityOnOutside(e) {
-  if (!e.target.closest('.header-avatar') && !e.target.closest('.identity-dropdown')) {
-    closeIdentityDropdown();
-  }
-}
-
-function setAdmin(yes, uid) {
-  S.isAdmin = yes;
-  S.userId = uid;
-  // Admin button removed — login via long-press on title
-  document.getElementById('tabAdmin').classList.toggle('hidden', !yes);
-  document.getElementById('fab').classList.toggle('hidden', !yes || !['draft','leaderboard'].includes(S.activeTab));
-}
-
-/* ===================== Data Loading ===================== */
-async function loadAll() {
-  const [p, g, s, b] = await Promise.all([
-    sb.from('pga_test_participants').select('*').order('draft_position', { ascending: true, nullsFirst: false }),
-    sb.from('pga_test_golfers').select('*').order('draft_round').order('draft_pick'),
-    sb.from('pga_test_scores').select('*'),
-    sb.from('pga_test_bonuses').select('*')
+  const [{ data: t }, { data: g }] = await Promise.all([
+    sb.from('tournaments').select('*').eq('id', S.activePool.tournament_id).maybeSingle(),
+    sb.from('tournament_golfers').select('*').eq('tournament_id', S.activePool.tournament_id).order('total_score', { nullsFirst: false })
   ]);
-  S.participants = p.data || [];
-  S.golfers = g.data || [];
-  S.scores = s.data || [];
-  S.bonuses = b.data || [];
-}
-
-/* ===================== Scoring Logic ===================== */
-function getGolferScore(golferId, round) {
-  // Priority: manual Supabase score > live ESPN score
-  const manual = S.scores.find(x => x.golfer_id === golferId && x.round === round && x.score > 0);
-  if (manual) return manual.score;
-  // Fallback: live ESPN data
-  const golfer = S.golfers.find(g => g.id === golferId);
-  if (golfer && golfer._live) {
-    const liveRound = golfer._live['r' + round];
-    if (liveRound) return liveRound;
-  }
-  return null;
-}
-
-
-function calcTeamRoundScore(participantId, round) {
-  const teamGolfers = S.golfers.filter(g => g.participant_id === participantId);
-  const count = (round <= 2) ? 4 : 3;
-  const roundScores = [];
-  for (const g of teamGolfers) {
-    const gs = golferStatus(g);
-    if (gs === 'wd') continue;
-    if (round >= 3 && (gs === 'cut' || !g.made_cut)) continue;
-    const sc = getGolferScore(g.id, round);
-    let toPar = null;
-    if (sc !== null) {
-      // Completed round score
-      toPar = sc - PAR;
-    } else if (g._live && g._live.currentRound === round && !g._live.finished) {
-      // Mid-round: use live round toPar
-      const rtp = g._live['r' + round + '_toPar'];
-      if (rtp !== undefined && rtp !== null) toPar = rtp;
-    }
-    if (toPar !== null) {
-      // Bonus applies only in R1
-      const bonus = round === 1 ? getGolferBonus(g.id) : 0;
-      roundScores.push(toPar - bonus);
-    }
-  }
-  if (roundScores.length === 0) return null;
-  roundScores.sort((a, b) => a - b);
-  const best = roundScores.slice(0, count);
-  return best.reduce((a, b) => a + b, 0);
-}
-
-function calcTeamTotal(participantId) {
-  let total = 0;
-  let hasAny = false;
-  for (let r = 1; r <= 4; r++) {
-    const rs = calcTeamRoundScore(participantId, r);
-    if (rs !== null) { total += rs; hasAny = true; }
-  }
-  return hasAny ? total : null;
-}
-
-// Returns 'active', 'cut', 'wd', or 'dq'
-function golferStatus(g) {
-  if (!g.made_cut) {
-    const dqMarker = S.scores.some(s => s.golfer_id === g.id && s.score === -1);
-    if (dqMarker) return 'dq';
-    const wdMarker = S.scores.some(s => s.golfer_id === g.id && s.score === -2);
-    if (wdMarker) return 'wd';
-    const hasScores = S.scores.some(s => s.golfer_id === g.id && s.score > 0);
-    const hasLiveScores = g._live && (g._live.r1 || g._live.r2);
-    return (hasScores || hasLiveScores) ? 'cut' : 'wd';
-  }
-  // 2. ESPN live status
-  if (g._live && g._live.status === 'cut') return 'cut';
-  return 'active';
-}
-
-function isGolferOut(g) {
-  const s = golferStatus(g);
-  return s === 'cut' || s === 'wd' || s === 'dq';
-}
-
-function checkEliminated(participantId) {
-  const teamGolfers = S.golfers.filter(g => g.participant_id === participantId);
-  const out = teamGolfers.filter(g => isGolferOut(g)).length;
-  return out > 2;
-}
-
-function getTeamBonusTotal(participantId) {
-  // Sum bonuses only for golfers that are active (not wd/dq/cut)
-  const teamGolfers = S.golfers.filter(g => g.participant_id === participantId);
-  let total = 0;
-  for (const g of teamGolfers) {
-    if (isGolferOut(g)) continue; // Bonus lost if golfer is out
-    total += getGolferBonus(g.id);
-  }
-  return total;
-}
-
-function calcTeamTotalLive(participantId) {
-  // Fallback for when no round scores available: use overall ESPN toPar
-  const teamGolfers = S.golfers.filter(g => g.participant_id === participantId);
-  const hasLive = teamGolfers.some(g => g._live);
-  if (!hasLive) return null;
-
-  const hasCutData = teamGolfers.some(g => g._live && g._live.status === 'cut');
-  const count = hasCutData ? 3 : 4;
-
-  const toParValues = teamGolfers
-    .filter(g => g._live && g._live.status !== 'cut' && golferStatus(g) !== 'wd')
-    .map(g => g._live.toPar)
-    .filter(v => v !== undefined && v !== null);
-
-  if (toParValues.length === 0) return null;
-  toParValues.sort((a, b) => a - b);
-  const best = toParValues.slice(0, count);
-  return best.reduce((a, b) => a + b, 0);
-}
-
-function getRanking() {
-  const teams = S.participants.map(p => {
-    const eliminated = checkEliminated(p.id);
-    const bonus = getTeamBonusTotal(p.id);
-    const rounds = [1,2,3,4].map(r => calcTeamRoundScore(p.id, r));
-    // Sum round scores (now includes mid-round live data + R1 bonus)
-    let total = null;
-    let hasAny = false;
-    for (const rs of rounds) {
-      if (rs !== null) { total = (total || 0) + rs; hasAny = true; }
-    }
-    // Fallback: if no round data at all, use overall live toPar
-    if (!hasAny) {
-      const totalLive = calcTeamTotalLive(p.id);
-      if (totalLive !== null) { total = totalLive; hasAny = true; }
-    }
-    const isLive = hasAny;
-    return { ...p, total: hasAny ? total : null, bonus, rounds, isEliminated: eliminated, isLive };
-  });
-  // Sort: non-eliminated first, then by total ascending, nulls last
-  teams.sort((a, b) => {
-    if (a.isEliminated !== b.isEliminated) return a.isEliminated ? 1 : -1;
-    if (a.total === null && b.total === null) return 0;
-    if (a.total === null) return 1;
-    if (b.total === null) return -1;
-    return a.total - b.total;
-  });
-  return teams;
+  S.tournament = t;
+  S.tournamentGolfers = g || [];
 }
 
 /* ===================== Formatting ===================== */
@@ -1812,867 +1580,230 @@ function fmtMoney(val) {
   return `${Math.round(val)}\u20AC`;
 }
 
-/* ===================== Render ===================== */
-function computeAllStats() {
-  const entries = Object.entries(S.liveScores);
-  if (entries.length === 0) return [];
+/* ===================== Member Helpers ===================== */
+function memberKey(m) {
+  // Eindeutiger Key: user_id für echte User, member.id für Platzhalter
+  return m.user_id || ('ph:' + m.id);
+}
+function memberName(m) {
+  if (!m) return '?';
+  if (m.is_placeholder) return m.display_name || 'Platzhalter';
+  return m.users?.name || m.display_name || 'User';
+}
+function memberInitials(m) {
+  const name = memberName(m);
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
 
-  // Find user's golfer names for .mine marking
-  const myP = S.myName ? S.participants.find(p => p.name === S.myName) : null;
-  const myGolferNames = new Set();
-  if (myP) {
-    S.golfers.filter(g => g.participant_id === myP.id).forEach(g => {
-      myGolferNames.add(normalizeName(g.name));
-    });
-  }
+/* ===================== Render: Rangliste (Pool-Ranking) ===================== */
+function renderRangliste() {
+  const c = document.getElementById('ranglisteContent');
+  if (!c) return;
+  if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
 
-  const players = [];
-  for (const [name, data] of entries) {
-    if (!data.holes) continue;
-    const dg = S.golfers.find(g => normalizeName(g.name) === normalizeName(name));
-    const team = dg ? S.participants.find(p => p.id === dg.participant_id) : null;
-    const isMine = myGolferNames.has(normalizeName(name));
-
-    let birdies = 0, eagles = 0, pars = 0, bogeys = 0, doubles = 0, totalHoles = 0;
-    let par3 = { sum: 0, n: 0 }, par4 = { sum: 0, n: 0 }, par5 = { sum: 0, n: 0 };
-    let front9 = { sum: 0, n: 0 }, back9 = { sum: 0, n: 0 };
-    let roundScores = [];
-    let allParVals = []; // for streaks
-
-    for (let r = 1; r <= 4; r++) {
-      const rh = data.holes['r' + r];
-      if (!rh || rh.length === 0) continue;
-      let roundTotal = 0;
-      rh.forEach(h => {
-        const pv = h.par === 'E' ? 0 : parseInt(h.par);
-        if (isNaN(pv)) return;
-        totalHoles++;
-        allParVals.push(pv);
-
-        if (pv <= -2) eagles++;
-        else if (pv === -1) birdies++;
-        else if (pv === 0) pars++;
-        else if (pv === 1) bogeys++;
-        else if (pv >= 2) doubles++;
-
-        // Par type performance
-        const holePar = h.score - pv;
-        if (holePar === 3) { par3.sum += h.score; par3.n++; }
-        else if (holePar === 4) { par4.sum += h.score; par4.n++; }
-        else if (holePar === 5) { par5.sum += h.score; par5.n++; }
-
-        // Front/Back
-        if (h.hole <= 9) { front9.sum += pv; front9.n++; }
-        else { back9.sum += pv; back9.n++; }
-
-        roundTotal += h.score;
-      });
-      if (rh.length >= 18) roundScores.push(roundTotal);
+  // Ranking: Summe der Scores aller gedrafteten Golfer pro Member
+  const rows = S.poolMembers.map(m => {
+    const picks = S.poolPicks.filter(p => p.member_id === m.id);
+    const golferNames = picks.map(p => p.golfer_name);
+    let total = 0;
+    for (const gn of golferNames) {
+      const golfer = S.tournamentGolfers.find(tg => tg.name === gn);
+      if (golfer && golfer.total_score !== null) total += golfer.total_score;
     }
+    return { member: m, picks: golferNames, total, picksCount: picks.length };
+  }).sort((a, b) => a.total - b.total);
 
-    if (totalHoles === 0) continue;
-
-    // Streaks
-    let maxBirdieStreak = 0, curBirdie = 0;
-    let maxBogeyFree = 0, curBogeyFree = 0;
-    allParVals.forEach(pv => {
-      if (pv <= -1) { curBirdie++; maxBirdieStreak = Math.max(maxBirdieStreak, curBirdie); }
-      else curBirdie = 0;
-      if (pv <= 0) { curBogeyFree++; maxBogeyFree = Math.max(maxBogeyFree, curBogeyFree); }
-      else curBogeyFree = 0;
-    });
-
-    const sn = shortName(name);
-    players.push({
-      name, sn, team: team?.name || null, isMine,
-      birdies, eagles, pars, bogeys, doubles, totalHoles,
-      scoringAvg: roundScores.length > 0 ? roundScores.reduce((a,b) => a+b, 0) / roundScores.length : null,
-      par3Avg: par3.n > 0 ? par3.sum / par3.n : null,
-      par4Avg: par4.n > 0 ? par4.sum / par4.n : null,
-      par5Avg: par5.n > 0 ? par5.sum / par5.n : null,
-      front9Avg: front9.n > 0 ? front9.sum / front9.n : null,
-      back9Avg: back9.n > 0 ? back9.sum / back9.n : null,
-      birdieStreak: maxBirdieStreak,
-      bogeyFreeStreak: maxBogeyFree,
-      rounds: roundScores.length
-    });
-  }
-  return players;
-}
-
-function toggleStCategory(el) {
-  const body = el.querySelector('.st-body');
-  if (el.classList.contains('open')) {
-    // Close: set explicit height first, then animate to 0
-    body.style.maxHeight = body.scrollHeight + 'px';
-    requestAnimationFrame(() => { body.style.maxHeight = '0'; });
-    el.classList.remove('open');
-  } else {
-    // Open: animate to scrollHeight, then remove inline style
-    el.classList.add('open');
-    body.style.maxHeight = body.scrollHeight + 'px';
-    body.addEventListener('transitionend', () => { if (el.classList.contains('open')) body.style.maxHeight = 'none'; }, { once: true });
-  }
-}
-
-function renderStats() {
-  const container = document.getElementById('statsContent');
-  if (!container) return;
-
-  if (new Date() < TOURNAMENT_START) {
-    container.innerHTML = '<div class="tk-empty"><div class="tk-empty-icon">&#128202;</div><h3>Turnier beginnt am Do, 2. April</h3><p>Stats sind ab Donnerstag verfügbar.</p></div>';
-    return;
-  }
-  const players = computeAllStats();
-  if (players.length === 0) {
-    container.innerHTML = '<div class="tk-empty"><div class="tk-empty-icon">&#128202;</div><h3>Keine Stats</h3><p>Stats werden berechnet sobald Live-Daten vorhanden sind</p></div>';
+  if (rows.length === 0) {
+    c.innerHTML = '<div class="empty">Noch keine Mitspieler im Pool</div>';
     return;
   }
 
-  const chevron = `<svg class="st-toggle" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>`;
+  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.activePool.name)}</div>`;
 
-  const categories = [
-    { title: 'Meiste Birdies', key: 'birdies', sort: (a,b) => b.birdies - a.birdies, fmt: v => v.birdies },
-    { title: 'Meiste Eagles', key: 'eagles', sort: (a,b) => b.eagles - a.eagles, fmt: v => v.eagles, filter: p => p.eagles > 0 },
-    { title: 'Wenigste Bogeys', key: 'bogeys', sort: (a,b) => a.bogeys - b.bogeys, fmt: v => v.bogeys },
-    { title: 'Scoring-Durchschnitt', key: 'scoringAvg', sort: (a,b) => (a.scoringAvg||999) - (b.scoringAvg||999), fmt: v => v.scoringAvg !== null ? v.scoringAvg.toFixed(1) : '—', filter: p => p.scoringAvg !== null },
-    { title: 'Beste Par-3 Performance', key: 'par3Avg', sort: (a,b) => (a.par3Avg||99) - (b.par3Avg||99), fmt: v => v.par3Avg !== null ? v.par3Avg.toFixed(2) : '—', filter: p => p.par3Avg !== null },
-    { title: 'Beste Par-4 Performance', key: 'par4Avg', sort: (a,b) => (a.par4Avg||99) - (b.par4Avg||99), fmt: v => v.par4Avg !== null ? v.par4Avg.toFixed(2) : '—', filter: p => p.par4Avg !== null },
-    { title: 'Beste Par-5 Performance', key: 'par5Avg', sort: (a,b) => (a.par5Avg||99) - (b.par5Avg||99), fmt: v => v.par5Avg !== null ? v.par5Avg.toFixed(2) : '—', filter: p => p.par5Avg !== null },
-    { title: 'Beste Front 9', key: 'front9Avg', sort: (a,b) => (a.front9Avg||99) - (b.front9Avg||99), fmt: v => v.front9Avg !== null ? (v.front9Avg >= 0 ? '+' : '') + v.front9Avg.toFixed(2) : '—', filter: p => p.front9Avg !== null },
-    { title: 'Beste Back 9', key: 'back9Avg', sort: (a,b) => (a.back9Avg||99) - (b.back9Avg||99), fmt: v => v.back9Avg !== null ? (v.back9Avg >= 0 ? '+' : '') + v.back9Avg.toFixed(2) : '—', filter: p => p.back9Avg !== null },
-    { title: 'Längste Birdie-Streak', key: 'birdieStreak', sort: (a,b) => b.birdieStreak - a.birdieStreak, fmt: v => v.birdieStreak, filter: p => p.birdieStreak > 0 },
-    { title: 'Bogey-Free Streak', key: 'bogeyFreeStreak', sort: (a,b) => b.bogeyFreeStreak - a.bogeyFreeStreak, fmt: v => v.bogeyFreeStreak }
-  ];
+  if (S.activePool.status === 'draft') {
+    html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">Draft läuft — Rangliste wird sichtbar sobald das Turnier startet</div>`;
+  }
 
-  let html = '';
-  categories.forEach((cat, ci) => {
-    let list = cat.filter ? players.filter(cat.filter) : [...players];
-    list.sort(cat.sort);
-    if (list.length === 0) return;
-
-    const hasMore = list.length > 3;
-    html += `<div class="st-category${ci < 4 ? ' open' : ''}" id="stCat${ci}">`;
-    html += `<div class="st-category-header" onclick="toggleStCategory(this.parentElement)">${cat.title} ${chevron}</div>`;
-    html += `<div class="st-body"><div class="${hasMore ? 'st-top3' : ''}" id="stList${ci}">`;
-
-    list.forEach((p, i) => {
-      const teamBadge = p.team ? `<span class="st-team">${esc(p.team)}</span>` : '';
-      html += `<div class="st-row">
-        <div class="st-rank">${i + 1}</div>
-        <div class="st-name">${esc(p.sn)}${teamBadge}</div>
-        <div class="st-val">${cat.fmt(p)}</div>
-      </div>`;
-    });
-
-    html += '</div>';
-    if (hasMore) {
-      html += `<div class="st-more" onclick="openStPanel('${cat.title}',${ci})">Alle anzeigen</div>`;
-    }
-    html += '</div></div>';
-  });
-
-  container.innerHTML = html;
-  // Set initial height for open categories
-  container.querySelectorAll('.st-category.open .st-body').forEach(b => { b.style.maxHeight = 'none'; });
-}
-
-// Stats panel cache for slide-in
-let _statsCache = [];
-
-function openStPanel(title, catIdx) {
-  if (_statsCache.length === 0) _statsCache = computeAllStats();
-  const cats = [
-    { title: 'Meiste Birdies', sort: (a,b) => b.birdies - a.birdies, fmt: v => v.birdies },
-    { title: 'Meiste Eagles', sort: (a,b) => b.eagles - a.eagles, fmt: v => v.eagles, filter: p => p.eagles > 0 },
-    { title: 'Wenigste Bogeys', sort: (a,b) => a.bogeys - b.bogeys, fmt: v => v.bogeys },
-    { title: 'Scoring-Durchschnitt', sort: (a,b) => (a.scoringAvg||999) - (b.scoringAvg||999), fmt: v => v.scoringAvg !== null ? v.scoringAvg.toFixed(1) : '—', filter: p => p.scoringAvg !== null },
-    { title: 'Beste Par-3 Performance', sort: (a,b) => (a.par3Avg||99) - (b.par3Avg||99), fmt: v => v.par3Avg !== null ? v.par3Avg.toFixed(2) : '—', filter: p => p.par3Avg !== null },
-    { title: 'Beste Par-4 Performance', sort: (a,b) => (a.par4Avg||99) - (b.par4Avg||99), fmt: v => v.par4Avg !== null ? v.par4Avg.toFixed(2) : '—', filter: p => p.par4Avg !== null },
-    { title: 'Beste Par-5 Performance', sort: (a,b) => (a.par5Avg||99) - (b.par5Avg||99), fmt: v => v.par5Avg !== null ? v.par5Avg.toFixed(2) : '—', filter: p => p.par5Avg !== null },
-    { title: 'Beste Front 9', sort: (a,b) => (a.front9Avg||99) - (b.front9Avg||99), fmt: v => v.front9Avg !== null ? (v.front9Avg >= 0 ? '+' : '') + v.front9Avg.toFixed(2) : '—', filter: p => p.front9Avg !== null },
-    { title: 'Beste Back 9', sort: (a,b) => (a.back9Avg||99) - (b.back9Avg||99), fmt: v => v.back9Avg !== null ? (v.back9Avg >= 0 ? '+' : '') + v.back9Avg.toFixed(2) : '—', filter: p => p.back9Avg !== null },
-    { title: 'Längste Birdie-Streak', sort: (a,b) => b.birdieStreak - a.birdieStreak, fmt: v => v.birdieStreak, filter: p => p.birdieStreak > 0 },
-    { title: 'Bogey-Free Streak', sort: (a,b) => b.bogeyFreeStreak - a.bogeyFreeStreak, fmt: v => v.bogeyFreeStreak }
-  ];
-  const cat = cats[catIdx];
-  if (!cat) return;
-
-  let list = cat.filter ? _statsCache.filter(cat.filter) : [..._statsCache];
-  list.sort(cat.sort);
-
-  document.getElementById('stPanelTitle').textContent = title;
-  let html = '';
-  list.forEach((p, i) => {
-    const mine = p.isMine ? ' mine' : '';
-    const teamBadge = p.team ? `<span class="st-team">${esc(p.team)}</span>` : '';
-    html += `<div class="st-row${mine}" style="padding:10px 16px">
-      <div class="st-rank">${i + 1}</div>
-      <div class="st-name">${esc(p.sn)}${teamBadge}</div>
-      <div class="st-val">${cat.fmt(p)}</div>
+  rows.forEach((r, i) => {
+    const isMe = r.member.user_id && r.member.user_id === S.userId;
+    html += `<div style="background:${isMe ? 'var(--green-dim)' : 'var(--card)'};border:1px solid ${isMe ? 'var(--green)' : 'var(--border)'};border-radius:var(--radius);padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:20px;font-weight:700;color:var(--text2);min-width:24px;text-align:center">${i + 1}</div>
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--green);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">${memberInitials(r.member)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:15px">${esc(memberName(r.member))}${r.member.is_placeholder ? ' <span style="font-size:10px;color:var(--text3);font-weight:400">(Platzhalter)</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.picksCount}/5 Picks</div>
+      </div>
+      <div style="font-family:var(--font-display);font-size:20px;font-weight:700" class="${scoreClass(r.total)}">${fmtScore(r.total)}</div>
     </div>`;
   });
-  document.getElementById('stPanelBody').innerHTML = html;
-
-  const panel = document.getElementById('stPanel');
-  panel.classList.add('open');
-
-  // Swipe-to-close (only from left edge)
-  const sheet = document.getElementById('stPanelSheet');
-  let startX = 0, dx = 0, swiping = false;
-  const onStart = e => {
-    startX = e.touches[0].clientX;
-    dx = 0;
-    swiping = startX < 50; // only trigger from left edge
-  };
-  const onMove = e => {
-    if (!swiping) return;
-    dx = e.touches[0].clientX - startX;
-    if (dx > 0) {
-      sheet.style.transition = 'none';
-      sheet.style.transform = `translateX(${dx}px)`;
-    }
-  };
-  const onEnd = () => {
-    if (!swiping) return;
-    sheet.style.transition = '';
-    sheet.style.transform = '';
-    if (dx > 80) closeStPanel();
-    swiping = false;
-  };
-  sheet.addEventListener('touchstart', onStart, { passive: true });
-  sheet.addEventListener('touchmove', onMove, { passive: true });
-  sheet.addEventListener('touchend', onEnd);
+  c.innerHTML = html;
 }
 
-function closeStPanel() {
-  document.getElementById('stPanel').classList.remove('open');
+/* ===================== Render: Leaderboard (Turnier Live) ===================== */
+function renderLeaderboardTab() {
+  const c = document.getElementById('leaderboardContent');
+  if (!c) return;
+  if (!S.activePool) {
+    c.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:14px;color:var(--text2)">Erstelle oder tritt einem Pool bei, um das Turnier-Leaderboard zu sehen.</div></div>';
+    return;
+  }
+  if (!S.tournament) {
+    c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
+      <div style="font-size:48px;margin-bottom:12px">⛳️</div>
+      <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">Noch kein Turnier verknüpft</div>
+      <div style="font-size:13px;color:var(--text2)">Pool-Admin kann im Admin-Tab ein Turnier zuweisen.</div>
+    </div>`;
+    return;
+  }
+  if (S.tournamentGolfers.length === 0) {
+    c.innerHTML = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">${esc(S.tournament.name)}</div>
+      <div class="empty" style="padding:40px 20px;text-align:center">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Turnier-Daten werden geladen…</div>
+        <div style="font-size:11px;color:var(--text3)">Live-Scores kommen in Phase 2 vom ESPN-Worker.</div>
+      </div>`;
+    return;
+  }
+
+  // Picks-Map: golferName → memberName(s)
+  const golferOwners = {};
+  S.poolPicks.forEach(p => {
+    const m = S.poolMembers.find(mm => mm.id === p.member_id);
+    if (!m) return;
+    (golferOwners[p.golfer_name] = golferOwners[p.golfer_name] || []).push(memberName(m));
+  });
+
+  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.tournament.name)}</div>`;
+  S.tournamentGolfers.forEach((g, i) => {
+    const owners = golferOwners[g.name];
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:12px">
+      <div style="min-width:28px;font-size:13px;font-weight:600;color:var(--text2);text-align:center">${g.position || (i + 1)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px;${g.status === 'cut' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${esc(g.name)}</div>
+        ${owners ? `<div style="font-size:10px;color:var(--green);font-weight:600">${owners.map(esc).join(' · ')}</div>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--text3);min-width:36px;text-align:right">${g.thru || ''}</div>
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:700;min-width:40px;text-align:right" class="${scoreClass(g.total_score)}">${fmtScore(g.total_score)}</div>
+    </div>`;
+  });
+  c.innerHTML = html;
 }
 
-/* ===================== Admin Panel ===================== */
-function renderAdmin() {
-  const c = document.getElementById('adminStatusContent');
-  if (!c || !S.isAdmin) return;
+/* ===================== Render: Draft ===================== */
+function renderDraftTab() {
+  const c = document.getElementById('draftContent');
+  if (!c) return;
+  if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
+  renderPoolDraft(c);
+}
 
-  const adminFilter = normalizeName(document.getElementById('adminFilter')?.value || '');
-  let allGolfers = [...S.golfers].sort((a, b) => a.name.localeCompare(b.name));
-  if (adminFilter) allGolfers = allGolfers.filter(g => normalizeName(g.name).includes(adminFilter));
+/* ===================== Render: Stats (Phase 1 stub) ===================== */
+function renderStatsTab() {
+  const c = document.getElementById('statsContent');
+  if (!c) return;
+  if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
+  c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">📊</div>
+    <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">Stats kommen in Phase 2</div>
+    <div style="font-size:13px;color:var(--text2)">Sobald Live-Scores verfügbar sind.</div>
+  </div>`;
+}
 
-  const adminHasVal = document.getElementById('adminFilter')?.value?.trim();
-  let html = `<div style="position:relative;margin-bottom:12px">
-    <input class="input" type="text" id="adminFilter" placeholder="Spieler suchen..." oninput="renderAdmin()" style="width:100%;display:block;padding-right:36px">
-    <div onclick="document.getElementById('adminFilter').value='';document.getElementById('adminFilter').blur();renderAdmin()" style="display:${adminHasVal ? 'flex' : 'none'};position:absolute;right:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:var(--bg3);color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;align-items:center;justify-content:center">×</div>
+/* ===================== Render: Payouts ===================== */
+function renderPayoutsTab() {
+  const c = document.getElementById('payoutsContent');
+  if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
+  const pool = S.activePool;
+  const numMembers = S.poolMembers.length;
+  const pot = numMembers * pool.entry_fee;
+  const p1 = Math.round(pot * 0.6);
+  const p2 = Math.round(pot * 0.3);
+  const p3 = pot - p1 - p2;
+  c.innerHTML = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(pool.name)}</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.5px">POT</div>
+      <div style="font-family:var(--font-display);font-size:36px;color:var(--green);font-weight:700">${fmtMoney(pot)}</div>
+      <div style="font-size:12px;color:var(--text2)">${numMembers} Mitspieler × ${fmtMoney(pool.entry_fee)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥇</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--green)">${fmtMoney(p1)}</div><div style="font-size:11px;color:var(--text3)">60%</div></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥈</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700">${fmtMoney(p2)}</div><div style="font-size:11px;color:var(--text3)">30%</div></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥉</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700">${fmtMoney(p3)}</div><div style="font-size:11px;color:var(--text3)">10%</div></div>
+    </div>`;
+}
+
+/* ===================== Render: Admin (Pool-Verwaltung) ===================== */
+function renderAdminTab() {
+  const c = document.getElementById('adminContent');
+  if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
+  const pool = S.activePool;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  if (!isAdmin) { c.innerHTML = '<div class="empty">Nur für Pool-Admin</div>'; return; }
+
+  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">Pool-Verwaltung</div>`;
+
+  // Mitspieler-Liste mit Add-Button
+  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:10px">MITSPIELER (${S.poolMembers.length})</div>`;
+  S.poolMembers.forEach(m => {
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${memberInitials(m)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${esc(memberName(m))}</div>
+        <div style="font-size:10px;color:var(--text3)">${m.is_placeholder ? 'Platzhalter' : (m.users?.email || 'Account')}${m.is_admin ? ' · Admin' : ''}</div>
+      </div>
+      ${m.user_id !== S.userId ? `<button onclick="removePoolMember('${m.id}')" style="background:none;border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">Entfernen</button>` : ''}
+    </div>`;
+  });
+  html += `<div style="display:flex;gap:8px;margin-top:12px">
+    <input class="input" type="text" id="placeholderName" placeholder="Name eingeben..." style="flex:1;padding:10px;font-size:13px">
+    <button class="btn btn-primary" onclick="addPlaceholderMember()" style="padding:10px 16px;font-size:13px">+ Platzhalter</button>
+  </div>
+  <button class="btn btn-secondary btn-block" onclick="showInviteLink(S.activePool)" style="margin-top:8px;padding:10px;font-size:13px">Einladungslink teilen</button>
   </div>`;
 
-  for (const g of allGolfers) {
-    const team = S.participants.find(p => p.id === g.participant_id);
-      const gs = golferStatus(g);
-      const isManualWd = gs === 'wd' && !g.made_cut;
-      const isManualDq = gs === 'dq';
-      const isAktiv = !isManualWd && !isManualDq;
-      const btn = (active, color) => `padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);${active ? `background:var(--${color});color:#fff` : 'background:var(--bg);color:var(--text2)'}`;
-      const mcLabel = gs === 'cut' ? ' <span style="font-size:10px;color:var(--red)">(MC)</span>' : '';
-      const teamLabel = team ? `<span style="font-size:10px;color:var(--gold);margin-left:4px">${esc(team.name)}</span>` : '';
-
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px">
-        <div style="font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${teamLabel}${mcLabel}</div>
-        <div style="display:flex;gap:4px">
-          <button style="${btn(isAktiv, 'green')}" onclick="setGolferStatus('${g.id}','active')">Aktiv</button>
-          <button style="${btn(isManualWd, 'red')}" onclick="setGolferStatus('${g.id}','wd')">WD</button>
-          <button style="${btn(isManualDq, 'red')}" onclick="setGolferStatus('${g.id}','dq')">DQ</button>
-        </div>
-      </div>`;
+  // Pool-Status
+  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px">POOL-STATUS</div>
+    <div style="font-size:13px;margin-bottom:10px">Aktuell: <strong>${pool.status}</strong></div>`;
+  if (pool.status === 'draft') {
+    const totalPicks = S.poolPicks.length;
+    const expected = S.poolMembers.length * 5;
+    html += `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Picks: ${totalPicks}/${expected}</div>`;
+    if (totalPicks >= expected) {
+      html += `<button class="btn btn-primary btn-block" onclick="activatePool()" style="padding:10px;font-size:13px">Pool starten</button>`;
+    }
+  } else if (pool.status === 'active') {
+    html += `<button class="btn btn-secondary btn-block" onclick="if(confirm('Pool wirklich abschließen?'))finishPool()" style="padding:10px;font-size:13px">Pool jetzt abschließen</button>`;
   }
-  c.innerHTML = html;
+  html += `</div>`;
 
-  // Restore search focus
-  const input = document.getElementById('adminFilter');
-  if (input && adminFilter) { input.value = adminFilter; input.setSelectionRange(adminFilter.length, adminFilter.length); input.focus(); }
+  c.innerHTML = html;
 }
 
-async function setGolferStatus(golferId, status) {
-  // status: 'active', 'wd', 'dq'
-  const madeCut = status === 'active';
-
-  // Set made_cut
-  const { error } = await sb.from('pga_test_golfers').update({ made_cut: madeCut }).eq('id', golferId);
+async function addPlaceholderMember() {
+  const input = document.getElementById('placeholderName');
+  const name = input.value.trim();
+  if (!name) { showToast('Name eingeben'); return; }
+  const { error } = await sb.from('pool_members').insert({
+    pool_id: S.activePool.id,
+    user_id: null,
+    display_name: name,
+    is_placeholder: true,
+    is_admin: false
+  });
   if (error) { showToast('Fehler: ' + error.message); return; }
-
-  // DQ marker: score -1 in R1, WD marker: score -2 in R1
-  // First remove any existing DQ/WD marker
-  const existingMarker = S.scores.find(s => s.golfer_id === golferId && s.round === 1 && (s.score === -1 || s.score === -2));
-  if (existingMarker) await sb.from('pga_test_scores').delete().eq('id', existingMarker.id);
-  // Then set new marker if needed
-  if (status === 'dq') {
-    await sb.from('pga_test_scores').insert({ golfer_id: golferId, round: 1, score: -1, user_id: S.userId });
-  } else if (status === 'wd') {
-    await sb.from('pga_test_scores').insert({ golfer_id: golferId, round: 1, score: -2, user_id: S.userId });
-  }
-
-  // Update local state
-  const g = S.golfers.find(g => g.id === golferId);
-  if (g) g.made_cut = madeCut;
-  // Reload scores to reflect DQ marker change
-  const { data: scores } = await sb.from('pga_test_scores').select('*');
-  if (scores) S.scores = scores;
+  input.value = '';
+  await loadPoolData();
   render();
-  const labels = { active: 'Aktiv', wd: 'WD', dq: 'DQ' };
-  showToast(`${labels[status]} gesetzt`);
+  showToast(`${name} hinzugefügt`);
 }
 
-function setAdminTab(tab) {
-  S._adminTab = tab;
-  document.querySelectorAll('#adminTabs .round-tab').forEach((b, i) => {
-    b.classList.toggle('active', ['draft','status','bonus'][i] === tab);
-  });
-  document.getElementById('adminDraftContent').style.display = tab === 'draft' ? '' : 'none';
-  document.getElementById('adminStatusContent').style.display = tab === 'status' ? '' : 'none';
-  document.getElementById('adminBonusContent').style.display = tab === 'bonus' ? '' : 'none';
-}
-
-function renderAdminBonus() {
-  const c = document.getElementById('adminBonusContent');
-  if (!c || !S.isAdmin) return;
-
-  // Golfer select
-  let optHtml = '';
-  for (const p of S.participants) {
-    const golfers = S.golfers.filter(g => g.participant_id === p.id);
-    if (golfers.length === 0) continue;
-    optHtml += `<optgroup label="${esc(p.name)}">`;
-    golfers.forEach(g => { optHtml += `<option value="${g.id}">${esc(g.name)}</option>`; });
-    optHtml += '</optgroup>';
-  }
-
-  let html = `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">
-    <div style="font-family:var(--font-display);font-size:16px;color:var(--green);margin-bottom:12px">Bonus hinzufügen</div>
-    <select id="selectBonusGolfer" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:8px">${optHtml}</select>
-    <select id="selectBonusType" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px">
-      <option value="par3_win">Par 3 Contest Gewinner (-2)</option>
-      <option value="hio">Hole-in-One (-1)</option>
-    </select>
-    <button class="btn btn-primary btn-block" onclick="addBonus()">Bonus hinzufügen</button>
-  </div>`;
-
-  // Existing bonuses
-  if (S.bonuses.length > 0) {
-    html += '<div style="font-family:var(--font-display);font-size:16px;color:var(--green);margin-bottom:8px">Vergebene Boni</div>';
-    S.bonuses.forEach(b => {
-      const golfer = S.golfers.find(g => g.id === b.golfer_id);
-      const team = golfer ? S.participants.find(p => p.id === golfer.participant_id) : null;
-      const label = b.bonus_type === 'par3_win' ? 'Par 3 Gewinner (-2)' : 'HIO (-1)';
-      const name = golfer ? esc(golfer.name) : '?';
-      const teamName = team ? ` <span style="color:var(--gold);font-size:11px">${esc(team.name)}</span>` : '';
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:4px">
-        <div><span style="font-size:13px;font-weight:500">${name}</span>${teamName}<span style="font-size:11px;color:var(--text3);margin-left:6px">${label}</span></div>
-        <button style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:var(--red);color:#fff;border:none" onclick="removeBonus('${b.id}')">×</button>
-      </div>`;
-    });
-  }
-
-  c.innerHTML = html;
-}
-
-// Golfer bonus: sum of shots for a specific golfer
-function getGolferBonus(golferId) {
-  return S.bonuses.filter(b => b.golfer_id === golferId).reduce((sum, b) => sum + b.shots, 0);
-}
-
-function render() {
-  updateIdentityBar();
-  renderTournament();
-  _statsCache = [];
-  renderStats();
-  if (S.activePool) {
-    renderLeaderboard();
-    renderPayoutsView();
-    renderDraft();
-    if (S.isAdmin) { renderAdmin(); renderAdminBonus(); }
-  }
-  if (S.userProfile) renderProfile();
-  updateFab();
-}
-
-function setLbRound(r) {
-  S.lbRound = r;
-  renderLeaderboard();
-}
-
-function renderPayoutsView() {
-  const pot = S.participants.length * ENTRY_FEE;
-  const ranking = getRanking();
-  const section = document.getElementById('payoutsViewContent');
-  if (!section) return;
-  if (S.participants.length < 2) {
-    section.innerHTML = '<div class="empty"><div class="empty-icon">&#128176;</div><h3>Noch keine Payouts</h3><p>Mindestens 2 Mitspieler nötig</p></div>';
-    return;
-  }
-
-  // If user selected identity → show personal summary
-  if (S.myName) {
-    const personalHtml = buildPersonalPayoutHtml(pot, ranking);
-    section.innerHTML = personalHtml;
-  } else {
-    const html = buildPayoutHtml(pot, ranking);
-    section.innerHTML = `
-      <div class="stats-row">
-        <div class="stat-card"><div class="stat-val">${S.participants.length}</div><div class="stat-label">Mitspieler</div></div>
-        <div class="stat-card"><div class="stat-val">${fmtMoney(pot)}</div><div class="stat-label">Pot</div></div>
-        <div class="stat-card"><div class="stat-val">${fmtMoney(pot*.6)}</div><div class="stat-label">1. Platz</div></div>
-      </div>
-      ${html}`;
-  }
-}
-
-function buildPodiumHtml(activeRanking, p1, p2, p3) {
-  const places = [
-    { place: '1.', cls: 'gold', barCls: 'p1', amount: p1, name: activeRanking[0]?.name },
-    { place: '2.', cls: 'silver', barCls: 'p2', amount: p2, name: activeRanking[1]?.name },
-    { place: '3.', cls: 'bronze', barCls: 'p3', amount: p3, name: activeRanking[2]?.name }
-  ].filter(p => p.name);
-  const podiumOrder = places.length >= 2 ? [places[1], places[0], ...(places[2] ? [places[2]] : [])] : [...places];
-  let html = '<div class="podium">';
-  podiumOrder.forEach(p => {
-    const mine = S.myName && p.name === S.myName;
-    html += `<div class="podium-slot${mine ? ' mine' : ''}">
-      <div class="podium-place ${p.cls}">${p.place}</div>
-      <div class="podium-name">${esc(p.name)}</div>
-      <div class="podium-amount">${fmtMoney(p.amount)}</div>
-      <div class="podium-bar ${p.barCls}"></div>
-    </div>`;
-  });
-  html += '</div>';
-  return html;
-}
-
-function buildPersonalPayoutHtml(pot, ranking) {
-  const p1 = Math.round(pot * 0.6);
-  const p2 = Math.round(pot * 0.3);
-  const p3 = pot - p1 - p2;
-
-  const activeRanking = ranking.filter(x => !x.isEliminated);
-  const myRanking = ranking.find(t => t.name === S.myName);
-  const myActiveIdx = myRanking ? activeRanking.indexOf(myRanking) : -1;
-
-  let myPayout = 0;
-  if (myActiveIdx === 0) myPayout = p1;
-  else if (myActiveIdx === 1) myPayout = p2;
-  else if (myActiveIdx === 2) myPayout = p3;
-  const myNet = myPayout - ENTRY_FEE;
-
-  // Compute transfers
-  const balances = ranking.map(t => {
-    const idx = activeRanking.indexOf(t);
-    let payout = 0;
-    if (idx === 0) payout = p1;
-    else if (idx === 1) payout = p2;
-    else if (idx === 2) payout = p3;
-    return { name: t.name, net: payout - ENTRY_FEE };
-  });
-  const creditors = balances.filter(b => b.net > 0).map(b => ({ ...b, remaining: b.net }));
-  const debtors = balances.filter(b => b.net < 0).map(b => ({ ...b, remaining: -b.net }));
-  const transfers = [];
-  let ci = 0, di = 0;
-  while (ci < creditors.length && di < debtors.length) {
-    const amount = Math.min(creditors[ci].remaining, debtors[di].remaining);
-    if (amount > 0) {
-      transfers.push({ from: debtors[di].name, to: creditors[ci].name, amount });
-      creditors[ci].remaining -= amount;
-      debtors[di].remaining -= amount;
-    }
-    if (creditors[ci].remaining === 0) ci++;
-    if (debtors[di].remaining === 0) di++;
-  }
-
-  const myTransfers = transfers.filter(t => t.from === S.myName || t.to === S.myName);
-  const posText = myRanking
-    ? (myRanking.isEliminated ? 'Eliminiert' : `Platz ${myActiveIdx + 1} von ${ranking.length}`)
-    : 'Nicht dabei';
-  const netColor = myNet > 0 ? 'var(--green)' : myNet < 0 ? 'var(--red)' : 'var(--text)';
-
-  let html = '';
-
-  // Podium
-  html += buildPodiumHtml(activeRanking, p1, p2, p3);
-
-  // Personal summary card
-  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)">
-    <div style="font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${esc(S.myName)}</div>
-    <div style="font-family:var(--font-display);font-size:40px;font-weight:700;color:${netColor};margin:8px 0">${myNet >= 0 ? '+' : ''}${fmtMoney(myNet)}</div>
-    <div style="font-size:12px;color:var(--text3)">${posText}</div>
-  </div>`;
-
-  // My transfers
-  if (myTransfers.length > 0) {
-    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)">`;
-    html += '<div class="transfer-section">';
-    html += `<div class="transfer-section-title">${myNet >= 0 ? 'Du bekommst' : 'Du zahlst'}</div>`;
-    myTransfers.forEach(t => {
-      const otherName = t.from === S.myName ? t.to : t.from;
-      const isPayingTo = t.from === S.myName;
-      html += `<div class="transfer-card mine">
-        <span class="transfer-from">${isPayingTo ? 'Du' : esc(otherName)}</span>
-        <span class="transfer-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></span>
-        <span class="transfer-to">${isPayingTo ? esc(otherName) : 'Du'}</span>
-        <span class="transfer-amount">${fmtMoney(t.amount)}</span>
-      </div>`;
-    });
-    html += '</div></div>';
-  } else if (myNet === 0) {
-    html += `<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">Keine Zahlungen nötig</div>`;
-  }
-
-  return html;
-}
-
-function buildPayoutHtml(pot, ranking) {
-  if (S.participants.length < 2) return '';
-
-  const p1 = Math.round(pot * 0.6);
-  const p2 = Math.round(pot * 0.3);
-  const p3 = pot - p1 - p2;
-
-  // Net per person (payout - entry)
-  const activeRanking = ranking.filter(x => !x.isEliminated);
-  const balances = ranking.map(t => {
-    const activeIdx = activeRanking.indexOf(t);
-    let payout = 0;
-    if (activeIdx === 0) payout = p1;
-    else if (activeIdx === 1) payout = p2;
-    else if (activeIdx === 2) payout = p3;
-    return { name: t.name, net: payout - ENTRY_FEE };
-  });
-
-  // Settlement: minimize transfers (greedy algorithm)
-  const creditors = balances.filter(b => b.net > 0).map(b => ({ ...b, remaining: b.net }));
-  const debtors = balances.filter(b => b.net < 0).map(b => ({ ...b, remaining: -b.net }));
-  const transfers = [];
-
-  let ci = 0, di = 0;
-  while (ci < creditors.length && di < debtors.length) {
-    const amount = Math.min(creditors[ci].remaining, debtors[di].remaining);
-    if (amount > 0) {
-      transfers.push({ from: debtors[di].name, to: creditors[ci].name, amount });
-      creditors[ci].remaining -= amount;
-      debtors[di].remaining -= amount;
-    }
-    if (creditors[ci].remaining === 0) ci++;
-    if (debtors[di].remaining === 0) di++;
-  }
-
-  // Render — Podium + Transfer cards
-  const podiumHtml = buildPodiumHtml(activeRanking, p1, p2, p3);
-
-  // Build transfer cards
-  let transferHtml = '';
-  if (transfers.length > 0) {
-    transferHtml += '<div class="transfer-section"><div class="transfer-section-title">Abrechnung</div>';
-    transfers.forEach(t => {
-      const mine = S.myName && (t.from === S.myName || t.to === S.myName);
-      transferHtml += `<div class="transfer-card${mine ? ' mine' : ''}">
-        <span class="transfer-from">${esc(t.from)}</span>
-        <span class="transfer-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></span>
-        <span class="transfer-to">${esc(t.to)}</span>
-        <span class="transfer-amount">${fmtMoney(t.amount)}</span>
-      </div>`;
-    });
-    transferHtml += '</div>';
-  }
-
-  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)">
-      ${podiumHtml}
-      <div style="border-top:1px solid var(--border)"></div>
-      ${transferHtml}
-  </div>`;
-}
-
-function toggleFavorite(name, ev) {
-  ev.stopPropagation();
-  if (!S.favorites) S.favorites = new Set();
-  if (S.favorites.has(name)) S.favorites.delete(name);
-  else S.favorites.add(name);
-  localStorage.setItem('pga_test_favs', JSON.stringify([...S.favorites]));
-  renderTournament();
-}
-
-/* ===================== Meine Golfer Dashboard ===================== */
-function renderMeineGolfer() {
-  const container = document.getElementById('meineGolferSection');
-  if (!container) return;
-  if (!S.myName) { container.innerHTML = ''; return; }
-
-  const myP = S.participants.find(p => p.name === S.myName);
-  if (!myP) { container.innerHTML = ''; return; }
-
-  const myGolfers = S.golfers.filter(g => g.participant_id === myP.id);
-  if (myGolfers.length === 0) { container.innerHTML = ''; return; }
-
-  // Determine active round
-  let activeRound = 0;
-  for (const g of myGolfers) {
-    if (g._live && g._live.currentRound > activeRound) activeRound = g._live.currentRound;
-  }
-  if (activeRound === 0) {
-    for (let r = 4; r >= 1; r--) {
-      if (myGolfers.some(g => getGolferScore(g.id, r) !== null)) { activeRound = r; break; }
-    }
-  }
-  if (activeRound === 0) activeRound = 1;
-
-  // Counting golfers
-  const count = activeRound <= 2 ? 4 : 3;
-  const countingIds = new Set();
-  const scored = myGolfers
-    .filter(g => golferStatus(g) !== 'wd' && (g.made_cut || activeRound <= 2))
-    .map(g => ({ id: g.id, toPar: g._live ? g._live.toPar : null }))
-    .filter(g => g.toPar !== null)
-    .sort((a, b) => a.toPar - b.toPar);
-  scored.slice(0, count).forEach(g => countingIds.add(g.id));
-
-  // Sort by toPar (best first), cut golfers last
-  const sortedGolfers = [...myGolfers].sort((a, b) => {
-    const aS = golferStatus(a);
-    const bS = golferStatus(b);
-    const aOrder = aS === 'dq' ? 3 : aS === 'wd' ? 2 : aS === 'cut' ? 1 : 0;
-    const bOrder = bS === 'dq' ? 3 : bS === 'wd' ? 2 : bS === 'cut' ? 1 : 0;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    const aTP = a._live ? a._live.toPar : 999;
-    const bTP = b._live ? b._live.toPar : 999;
-    return aTP - bTP;
-  });
-
-  // Team total score
-  const ranking = getRanking();
-  const myTeam = ranking.find(t => t.name === S.myName);
-  const teamTotal = myTeam ? fmtScore(myTeam.total) : '—';
-  const teamCls = myTeam && myTeam.total !== null ? (myTeam.total < 0 ? 'under' : myTeam.total > 0 ? 'over' : 'even') : '';
-
-  let html = `<div class="mg-strip"><div class="mg-title">Meine Golfer <span class="mg-score ${teamCls}" style="font-size:14px;margin-left:6px">${teamTotal}</span></div><div class="mg-scroll">`;
-  for (const g of sortedGolfers) {
-    const gStatus = golferStatus(g); const isCut = gStatus !== 'active';
-    const isCounting = countingIds.has(g.id);
-    const toPar = g._live ? g._live.toPar : null;
-    const thru = g._live ? g._live.thru : null;
-    const headshot = g._live ? g._live.headshot : '';
-    const scoreCls = toPar !== null ? (toPar < 0 ? 'under' : toPar > 0 ? 'over' : 'even') : '';
-    const cardCls = ['mg-card', isCounting ? 'counting' : '', isCut ? 'cut' : ''].filter(Boolean).join(' ');
-    const avatarHtml = headshot
-      ? `<img class="mg-avatar" src="${headshot}" alt="" onerror="this.outerHTML='<div class=mg-avatar-fb>${esc(g.name[0])}</div>'">`
-      : `<div class="mg-avatar-fb">${esc(g.name[0])}</div>`;
-    html += `<div class="${cardCls}" onclick="showScorecard('${g.id}')">
-      ${avatarHtml}
-      <div class="mg-info">
-        <div class="mg-name">${esc(shortName(g.name))}</div>
-        <div class="mg-score ${scoreCls}">${fmtScore(toPar)}</div>
-        ${isCut ? `<div class="mg-cut">${gStatus === 'dq' ? 'DQ' : gStatus === 'wd' ? 'WD' : 'CUT'}</div>` : (thru ? `<div class="mg-thru">${thru}</div>` : '')}
-      </div>
-    </div>`;
-  }
-  html += '</div></div>';
-  container.innerHTML = html;
-}
-
-
-
-function renderLeaderboard() {
-  renderMeineGolfer();
-  // Preserve open state
-  const openEntries = new Set();
-  document.querySelectorAll('#leaderboardList .lb-entry.open').forEach(el => {
-    const id = el.dataset.id;
-    if (id) openEntries.add(id);
-  });
-
-  const pot = S.participants.length * ENTRY_FEE;
-  const ranking = getRanking();
-
-
-
-  // Filter by search (normalize to match accented names like Åberg/Âberg)
-  const lbFilterEl = document.getElementById('lbFilter');
-  const lbFilterVal = normalizeName(lbFilterEl?.value || '');
-  const lbClear = document.getElementById('lbFilterClear');
-  if (lbClear) lbClear.style.display = lbFilterEl?.value?.trim() ? 'flex' : 'none';
-  const filteredRanking = lbFilterVal ? ranking.filter(t => normalizeName(t.name).includes(lbFilterVal)) : ranking;
-
-  // Round tabs
-  const days = ['Gesamt','Do','Fr','Sa','So'];
-  document.getElementById('lbRoundTabs').innerHTML = days.map((d, i) =>
-    `<button class="round-tab ${S.lbRound === i ? 'active' : ''}" onclick="setLbRound(${i})">${d}</button>`
-  ).join('');
-  if (ranking.length === 0) {
-    document.getElementById('leaderboardList').innerHTML = `
-      <div class="empty"><div class="empty-icon">&#9971;</div><h3>Noch keine Mitspieler</h3><p>Mitspieler werden im Draft Tab hinzugef&uuml;gt</p></div>`;
-    return;
-  }
-
-  const rd = S.lbRound; // 0=total, 1-4=round
-
-  // Sort by selected round if not Gesamt
-  if (rd > 0) {
-    filteredRanking.sort((a, b) => {
-      const aElim = a.isEliminated ? 1 : 0;
-      const bElim = b.isEliminated ? 1 : 0;
-      if (aElim !== bElim) return aElim - bElim;
-      const aScore = a.rounds[rd - 1];
-      const bScore = b.rounds[rd - 1];
-      if (aScore === null && bScore === null) return 0;
-      if (aScore === null) return 1;
-      if (bScore === null) return -1;
-      return aScore - bScore;
-    });
-  }
-
-  // Compute ranks first
-  let rank = 0;
-  filteredRanking.forEach((t, i) => {
-    if (!t.isEliminated) rank = i + 1;
-    t._rank = t.isEliminated ? 0 : rank;
-  });
-
-  function renderLbEntry(t) {
-    const trophyIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E63946" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4a2 2 0 01-2-2V5h4"/><path d="M18 9h2a2 2 0 002-2V5h-4"/><path d="M4 5h16v4a6 6 0 01-6 6h-4a6 6 0 01-6-6V5z"/><path d="M12 15v3"/><path d="M8 21h8"/></svg>`;
-    const rankDisplay = t.isEliminated ? '&times;' : (t._rank === 1 ? trophyIcon : t._rank);
-    const isMine = S.myName && t.name === S.myName;
-    const isFav = S.favorites && S.favorites.has(t.name);
-    const cls = [
-      'lb-entry',
-      t.isEliminated ? 'eliminated' : '',
-      t._rank === 1 && !t.isEliminated ? 'rank-1' : '',
-      isMine ? 'mine' : ''
-    ].filter(Boolean).join(' ');
-
-    // Score to display
-    const displayScore = rd === 0 ? t.total : t.rounds[rd - 1];
-    const totalCls = displayScore !== null ? (displayScore < 0 ? 'under' : displayScore > 0 ? 'over' : 'even') : '';
-
-    // Summary line under name
-    let summaryHtml = '';
-    if (rd === 0) {
-      summaryHtml = '<div class="lb-detail">' + t.rounds.map((r, ri) => `<span>R${ri+1}: ${fmtScore(r)}</span>`).join('') + '</div>';
-    } else {
-      // Show counting count for this round
-      const countNeeded = rd <= 2 ? 4 : 3;
-      summaryHtml = `<div class="lb-detail"><span>Beste ${countNeeded} von 5</span></div>`;
-    }
-
-    // Expandable golfer detail
-    const teamGolfers = S.golfers.filter(g => g.participant_id === t.id);
-    let expandHtml = '';
-    if (teamGolfers.length > 0) {
-      const countingMap = {};
-      for (let r = 1; r <= 4; r++) {
-        const count = r <= 2 ? 4 : 3;
-        const withScores = teamGolfers
-          .filter(g => golferStatus(g) !== 'wd' && (r < 3 || g.made_cut))
-          .map(g => { const sc = getGolferScore(g.id, r); const bonus = r === 1 ? getGolferBonus(g.id) : 0; return { id: g.id, score: sc !== null ? sc - bonus : null }; })
-          .filter(x => x.score !== null)
-          .sort((a, b) => a.score - b.score);
-        withScores.slice(0, count).forEach(x => { countingMap[x.id + '_' + r] = true; });
-      }
-
-      // Sort golfers: by toPar (best first), cut players last
-      const sortedTeamGolfers = [...teamGolfers].sort((a, b) => {
-        const aS = golferStatus(a);
-        const bS = golferStatus(b);
-        const aOrder = aS === 'dq' ? 3 : aS === 'wd' ? 2 : aS === 'cut' ? 1 : 0;
-        const bOrder = bS === 'dq' ? 3 : bS === 'wd' ? 2 : bS === 'cut' ? 1 : 0;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        const aTP = a._live ? a._live.toPar : 999;
-        const bTP = b._live ? b._live.toPar : 999;
-        return aTP - bTP;
-      });
-
-      expandHtml = '<div class="lb-expand-inner">';
-      if (rd === 0) {
-        expandHtml += '<div class="round-headers" style="padding:0 0 6px"><span>R1</span><span>R2</span><span>R3</span><span>R4</span><span style="width:40px">Σ</span></div>';
-        expandHtml += sortedTeamGolfers.map(g => {
-          const gStatus = golferStatus(g); const isCut = gStatus !== 'active';
-          const golferBonus = getGolferBonus(g.id);
-          const rounds = [1,2,3,4].map(r => {
-            const sc = getGolferScore(g.id, r);
-            const bonus = r === 1 ? golferBonus : 0;
-            const rel = sc !== null ? sc - PAR - bonus : null;
-            const sCls = scoreClass(rel);
-            const counting = countingMap[g.id + '_' + r];
-            // Mid-round: show toPar + thru instead of score
-            if (g._live && g._live.currentRound === r && !g._live.finished) {
-              const rtp = g._live['r' + r + '_toPar'] !== undefined ? g._live['r' + r + '_toPar'] : g._live.toPar;
-              const midBonusBadge = r === 1 && bonus > 0 ? `<div style="font-size:8px;color:var(--gold2);line-height:1;margin-top:2px">★-${bonus}</div>` : '';
-              return `<div class="golfer-rd" style="font-size:11px;color:var(--green);font-weight:600;line-height:1.1">${fmtScore(rtp)}<div style="font-size:8px;color:var(--text3);font-weight:400">${g._live.thru}</div>${midBonusBadge}</div>`;
-            }
-            const bonusBadge = r === 1 && bonus > 0 ? `<div style="font-size:8px;color:var(--gold2);line-height:1;margin-top:2px">★-${bonus}</div>` : '';
-            return `<div class="golfer-rd ${sCls}" style="height:auto;${counting ? 'border:1.5px solid var(--green);font-weight:700' : ''}">${sc !== null ? sc : '—'}${bonusBadge}</div>`;
-          }).join('');
-          // Live toPar + thru column
-          const liveHtml = g._live
-            ? `<div style="width:40px;text-align:center;font-size:11px;line-height:1.2">
-                <div style="font-weight:600;color:var(--green)">${fmtScore(g._live.toPar)}</div>
-                ${g._live.thru && g._live.thru !== 'F' ? `<div style="color:var(--text3);font-size:9px">${g._live.thru}</div>` : ''}
-              </div>`
-            : '<div style="width:40px"></div>';
-          const cutBadge = isCut ? `<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px">${gStatus === 'dq' ? 'DQ' : gStatus === 'wd' ? 'WD' : 'CUT'}</span>` : '';
-          return `<div class="golfer-row ${isCut ? 'cut' : ''}" style="cursor:pointer" onclick="event.stopPropagation();showScorecard('${g.id}')">
-            <div class="golfer-name">${esc(shortName(g.name))}${cutBadge}</div>
-            <div class="golfer-rounds">${rounds}</div>
-            ${liveHtml}
-          </div>`;
-        }).join('');
-      } else {
-        expandHtml += sortedTeamGolfers.map(g => {
-          const gStatus = golferStatus(g); const isCut = gStatus !== 'active';
-          const sc = getGolferScore(g.id, rd);
-          const rel = sc !== null ? sc - PAR : null;
-          const sCls = scoreClass(rel);
-          const counting = countingMap[g.id + '_' + rd];
-          const thru = (g._live && g._live.thru && !isCut) ? g._live.thru : '';
-          // Show toPar + thru if no final round score yet and live data available
-          const hasRoundScore = sc !== null;
-          const liveInfo = (!hasRoundScore && g._live && !isCut)
-            ? `<span style="font-size:12px;font-weight:600;color:var(--green)">${fmtScore(g._live.toPar)}</span>${thru ? `<span style="font-size:10px;color:var(--text3);margin-left:4px">${thru}</span>` : ''}`
-            : '';
-          const golferBonus = rd === 1 ? getGolferBonus(g.id) : 0;
-          const golferBonusHtml = golferBonus > 0 ? `<span style="font-size:10px;color:var(--gold2);margin-left:4px">★-${golferBonus}</span>` : '';
-          const cutBadgeRd = isCut ? `<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px">${gStatus === 'dq' ? 'DQ' : gStatus === 'wd' ? 'WD' : 'CUT'}</span>` : '';
-          return `<div class="golfer-row ${isCut ? 'cut' : ''}" style="cursor:pointer" onclick="event.stopPropagation();showScorecard('${g.id}')">
-            <div class="golfer-name">${esc(shortName(g.name))}${golferBonusHtml}${cutBadgeRd}</div>
-            <div style="display:flex;align-items:center;gap:6px">
-              ${thru && hasRoundScore ? `<span style="font-size:10px;color:var(--text3)">${thru}</span>` : ''}
-              ${hasRoundScore ? `<div class="golfer-rd ${sCls}" style="${counting ? 'border:1.5px solid var(--green);font-weight:700' : ''}">${fmtScore(rel)}</div>` : ''}
-              ${liveInfo}
-              ${!hasRoundScore && !liveInfo ? '<div class="golfer-rd">—</div>' : ''}
-            </div>
-          </div>`;
-        }).join('');
-      }
-      expandHtml += '</div>';
-    }
-
-    const bonusHtml = t.bonus > 0 ? `<div class="lb-bonus">Bonus: -${t.bonus}</div>` : '';
-    const elimBadge = t.isEliminated ? '<span class="eliminated-badge">ELIMINATED</span>' : '';
-    const chevron = teamGolfers.length > 0 ? `<div class="lb-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></div>` : '';
-    return `<div class="${cls}" data-id="${t.id}" onclick="this.classList.toggle('open')">
-      <div class="lb-rank">${rankDisplay}</div>
-      <div class="lb-info">
-        <div class="lb-name">${esc(t.name)}${elimBadge}</div>
-        ${summaryHtml}
-      </div>
-      <div class="lb-score">
-        <div class="lb-total ${totalCls}">${fmtScore(displayScore)}</div>
-        ${rd === 0 ? bonusHtml : ''}
-      </div>
-      ${chevron}
-      <div class="lb-expand">${expandHtml}</div>
-    </div>`;
-  }
-
-  document.getElementById('leaderboardList').innerHTML = filteredRanking.map(renderLbEntry).join('');
-
-  // Restore open state after re-render
-  openEntries.forEach(id => {
-    const el = document.querySelector(`#leaderboardList [data-id="${id}"]`);
-    if (el) el.classList.add('open');
-  });
+async function removePoolMember(memberId) {
+  if (!confirm('Mitspieler wirklich entfernen?')) return;
+  const { error } = await sb.from('pool_members').delete().eq('id', memberId);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  await loadPoolData();
+  render();
 }
 
 function renderPoolDraft(c) {
@@ -2680,81 +1811,77 @@ function renderPoolDraft(c) {
   const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
   let html = '';
 
-  // Header: Status
   if (pool.status === 'finished') {
-    html += `<div style="background:var(--bg2);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
-      <div style="font-size:14px;color:var(--text2)">Pool abgeschlossen</div>
-    </div>`;
-    c.innerHTML = html;
+    c.innerHTML = '<div class="empty">Pool abgeschlossen</div>';
     return;
   }
 
   const totalPicks = S.poolPicks.length;
   const totalMembers = S.poolMembers.length;
   const maxRounds = 5;
-  const allPicksDone = totalPicks >= totalMembers * maxRounds;
+  const allPicksDone = totalMembers > 0 && totalPicks >= totalMembers * maxRounds;
+
+  if (totalMembers === 0) {
+    html += `<div class="empty" style="padding:20px;text-align:center">
+      <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Noch keine Mitspieler</div>
+      ${isAdmin ? '<div style="font-size:12px;color:var(--text3)">Lade Mitspieler ein oder lege im Admin-Tab Platzhalter an.</div>' : ''}
+    </div>`;
+    c.innerHTML = html;
+    return;
+  }
 
   if (allPicksDone) {
     html += `<div style="background:var(--green);color:#fff;padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
       <div style="font-size:18px;font-weight:600">Draft komplett!</div>
-      <div style="font-size:12px;opacity:0.85;margin-top:4px">Alle Spieler sind gedraftet</div>
-      ${isAdmin && pool.status === 'draft' ? `<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>` : ''}
+      ${isAdmin && pool.status === 'draft' ? '<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>' : ''}
     </div>`;
   } else {
     const current = getCurrentDrafter();
     if (current && current.member) {
       const myTurn = isMyTurn();
-      const memberName = current.member.users?.name || 'Unknown';
+      const mName = memberName(current.member);
       if (myTurn) {
-        html += `<div style="background:var(--green);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px;animation:pulse 2s infinite">
+        const isPh = current.member.is_placeholder;
+        html += `<div style="background:var(--green);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
           <div style="font-size:11px;letter-spacing:1px;opacity:0.85">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
-          <div style="font-size:22px;font-weight:600;margin:8px 0">Du bist dran!</div>
+          <div style="font-size:22px;font-weight:600;margin:8px 0">${isPh ? 'Pick für ' + esc(mName) : 'Du bist dran!'}</div>
           <button class="btn" onclick="openPoolDraftModal()" style="background:#fff;color:var(--green);font-weight:600;padding:10px 20px">Spieler picken</button>
         </div>`;
       } else {
         html += `<div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
           <div style="font-size:11px;letter-spacing:1px;color:var(--text3)">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
-          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(memberName)}</strong>...</div>
+          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(mName)}</strong>...</div>
         </div>`;
       }
     }
   }
 
-  // Mitspieler-Reihenfolge
-  html += '<div class="section-title">Mitspieler &amp; Draft Reihenfolge</div>';
+  html += '<div class="section-title">Reihenfolge</div>';
   const ordered = [...S.poolMembers].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
+  const cur = getCurrentDrafter();
   html += ordered.map(m => {
-    const memberPicks = S.poolPicks.filter(p => p.user_id === m.user_id).length;
-    const isCurrent = getCurrentDrafter()?.member?.user_id === m.user_id;
+    const memberPicks = S.poolPicks.filter(p => p.member_id === m.id).length;
+    const isCurrent = cur?.member?.id === m.id;
     return `<div class="order-item" ${isCurrent ? 'style="border:2px solid var(--green)"' : ''}>
       <div class="order-num">${m.draft_position || '?'}</div>
-      <div class="order-name">${esc(m.users?.name || 'Unknown')}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+      <div class="order-name">${esc(memberName(m))}${m.is_placeholder ? ' <span style="font-size:10px;color:var(--text3)">PH</span>' : ''}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
       <div style="font-size:11px;color:var(--text3)">${memberPicks}/${maxRounds}</div>
     </div>`;
   }).join('');
 
-  // Field-Status
-  if (S.fieldLoaded) {
-    const total = S.pgaTestField.length;
-    html += `<div style="font-size:12px;color:var(--text2);margin:12px 0 4px;padding-left:4px">Feld: ${total} Spieler &middot; ${totalPicks} gedraftet</div>`;
-  }
-
-  // Picks pro Runde
-  html += '<div class="section-title" style="margin-top:16px">Draft Picks</div>';
+  html += '<div class="section-title" style="margin-top:16px">Picks</div>';
   for (let r = 1; r <= maxRounds; r++) {
-    const roundPicks = S.poolPicks
-      .filter(p => p.draft_round === r)
-      .sort((a, b) => a.draft_pick - b.draft_pick);
+    const roundPicks = S.poolPicks.filter(p => p.draft_round === r).sort((a, b) => a.draft_pick - b.draft_pick);
     html += `<div class="draft-round-label">Runde ${r} ${r % 2 === 0 ? '(Reverse)' : ''}</div>`;
     if (roundPicks.length === 0) {
-      html += `<div class="draft-pick"><div class="draft-empty">Noch keine Picks</div></div>`;
+      html += `<div class="draft-pick"><div class="draft-empty">—</div></div>`;
     } else {
       html += roundPicks.map(p => {
-        const member = S.poolMembers.find(m => m.user_id === p.user_id);
+        const member = S.poolMembers.find(m => m.id === p.member_id);
         return `<div class="draft-pick">
           <div class="draft-num">${p.draft_pick}</div>
           <div class="draft-golfer">${esc(p.golfer_name)}</div>
-          <div class="draft-team">${member ? esc(member.users?.name || '?') : '?'}</div>
+          <div class="draft-team">${member ? esc(memberName(member)) : '?'}</div>
         </div>`;
       }).join('');
     }
@@ -2776,29 +1903,30 @@ function openPoolDraftModal() {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
   S.draftModalOpen = true;
   document.getElementById('inputGolferName').value = '';
-  document.getElementById('inputGolferSearch').value = '';
-  // Hide team/round selectors for pool draft (auto-determined)
-  const teamSel = document.getElementById('selectDraftTeam');
-  const roundSel = document.getElementById('selectDraftRound');
-  if (teamSel) teamSel.parentElement.style.display = 'none';
-  if (roundSel) roundSel.parentElement.style.display = 'none';
-  // Replace addDraftPick callback with addPoolPick
-  const addBtn = document.querySelector('#modalDraftPick .btn-primary');
-  if (addBtn) addBtn.setAttribute('onclick', 'addPoolPick()');
-  filterFieldList();
+  const current = getCurrentDrafter();
+  const ctx = document.getElementById('draftPickContext');
+  if (ctx && current) {
+    ctx.textContent = `Runde ${current.round} · Pick ${current.pickInRound} · für ${memberName(current.member)}`;
+  }
   openModal('modalDraftPick');
+  setTimeout(() => document.getElementById('inputGolferName').focus(), 100);
 }
 
 async function addPoolPick() {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
-  const name = document.getElementById('inputGolferName').value.trim().replace(/\s*\(a\)\s*$/, '');
-  if (!name) { showToast('Bitte Spieler ausw&auml;hlen'); return; }
+  const name = document.getElementById('inputGolferName').value.trim();
+  if (!name) { showToast('Bitte Spieler eingeben'); return; }
   const current = getCurrentDrafter();
   if (!current) { showToast('Kein Drafter ermittelt'); return; }
+  // Doppelpick verhindern
+  if (S.poolPicks.some(p => p.golfer_name.toLowerCase() === name.toLowerCase())) {
+    showToast('Dieser Spieler wurde bereits gedraftet'); return;
+  }
 
   const { error } = await sb.from('pool_picks').insert({
     pool_id: S.activePool.id,
-    user_id: S.userId,
+    user_id: current.member.user_id,  // null bei Platzhalter
+    member_id: current.member.id,
     golfer_name: name,
     draft_round: current.round,
     draft_pick: current.pickInRound
@@ -2814,586 +1942,37 @@ async function addPoolPick() {
   render();
 }
 
-function renderDraft() {
-  if (S.draftModalOpen) return;
-  const c = document.getElementById('adminDraftContent');
-  if (!c) return;
-
-  // Pool-Mode: render new pool draft UI
-  if (S.activePool) {
-    return renderPoolDraft(c);
-  }
-
-  let html = '';
-
-  // Admin buttons — always show when admin
-  if (S.isAdmin) {
-    html += `<div style="display:flex;gap:8px;margin-bottom:16px">
-      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="openModal('modalParticipant')">+ Mitspieler</button>
-      <button class="btn btn-primary btn-sm" style="flex:1" onclick="randomizeDraftOrder()">&#127922; Auslosen</button>
-    </div>`;
-  }
-
-  if (S.participants.length === 0) {
-    html += `<div class="empty"><div class="empty-icon">&#127183;</div><h3>Draft Board</h3>
-      <p>F&uuml;ge zuerst deine Mitspieler hinzu</p></div>`;
-    c.innerHTML = html;
-    return;
-  }
-
-  html += '<div class="section-title">Mitspieler &amp; Draft Reihenfolge</div>';
-  const ordered = [...S.participants].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
-  html += ordered.map((p, i) => `
-    <div class="order-item">
-      ${S.isAdmin
-        ? `<input type="number" inputmode="numeric" class="order-num-input" value="${p.draft_position || ''}" placeholder="?" onchange="updateDraftPosition('${p.id}',this.value)" onclick="event.stopPropagation()">`
-        : `<div class="order-num">${p.draft_position || '?'}</div>`}
-      <div class="order-name">${esc(p.name)}</div>
-      ${S.isAdmin ? `<div class="order-actions"><button onclick="removeParticipant('${p.id}')" title="Entfernen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>` : ''}
-    </div>
-  `).join('');
-
-  // Draft Picks by Round (Snake order)
-  // Field status
-  if (S.fieldLoaded) {
-    const drafted = S.golfers.length;
-    const total = S.pgaTestField.length;
-    html += `<div style="font-size:12px;color:var(--text2);margin:12px 0 4px;padding-left:4px">Masters Feld: ${total} Spieler geladen &middot; ${drafted} gedraftet</div>`;
-  }
-
-  html += '<div class="section-title" style="margin-top:16px">Draft Picks</div>';
-  for (let r = 1; r <= 5; r++) {
-    const roundPicks = S.golfers.filter(g => g.draft_round === r).sort((a, b) => a.draft_pick - b.draft_pick);
-    html += `<div class="draft-round-label">Runde ${r} ${r % 2 === 0 ? '(Reverse)' : ''}</div>`;
-    if (roundPicks.length === 0) {
-      html += `<div class="draft-pick"><div class="draft-empty">Noch keine Picks</div></div>`;
-    } else {
-      html += roundPicks.map(g => {
-        const team = S.participants.find(p => p.id === g.participant_id);
-        return `<div class="draft-pick">
-          <div class="draft-num">${g.draft_pick}</div>
-          <div class="draft-golfer">${esc(g.name)}</div>
-          <div class="draft-team">${team ? esc(team.name) : '?'}</div>
-        </div>`;
-      }).join('');
-    }
-  }
-
-  c.innerHTML = html;
-}
-
 /* ===================== Tab Switching ===================== */
 function switchTab(tab) {
   S.activeTab = tab;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  const viewEl = document.getElementById('view' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  if (viewEl) viewEl.classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  if (tab === 'profile') renderProfile();
+  render();
   updateFab();
+}
+
+function render() {
+  const t = S.activeTab;
+  if (t === 'profile') renderProfile();
+  else if (t === 'rangliste') renderRangliste();
+  else if (t === 'leaderboard') renderLeaderboardTab();
+  else if (t === 'draft') renderDraftTab();
+  else if (t === 'admin') renderAdminTab();
+  else if (t === 'stats') renderStatsTab();
+  else if (t === 'payouts') renderPayoutsTab();
 }
 
 function updateFab() {
   const fab = document.getElementById('fab');
   if (!fab) return;
-  // Pool draft: FAB für eigenen Pick wenn dran
-  if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'admin' && S._adminTab === 'draft' && isMyTurn()) {
+  if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'draft' && isMyTurn()) {
     fab.classList.remove('hidden');
     fab.onclick = () => openPoolDraftModal();
-    return;
-  }
-  // Legacy admin draft (pga_test)
-  if (!S.isAdmin) { fab.classList.add('hidden'); return; }
-  if (S.activeTab === 'admin' && S._adminTab === 'draft') {
-    fab.classList.remove('hidden');
-    fab.onclick = () => openDraftPickModal();
   } else {
     fab.classList.add('hidden');
   }
-}
-
-/* ===================== Admin Auth ===================== */
-function toggleAdmin() {
-  if (S.isAdmin) {
-    sb.auth.signOut();
-    setAdmin(false, null);
-    render();
-    showToast('Abgemeldet');
-  } else {
-    openModal('modalAuth');
-  }
-}
-
-async function doLogin() {
-  const email = document.getElementById('authEmail').value.trim();
-  const pass = document.getElementById('authPass').value;
-  if (!email || !pass) return;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { showToast('Login fehlgeschlagen'); return; }
-  setAdmin(true, data.user.id);
-  closeModal('modalAuth');
-  render();
-  showToast('Angemeldet als Admin');
-}
-
-/* ===================== Admin Actions ===================== */
-async function addParticipant() {
-  const name = document.getElementById('inputParticipantName').value.trim();
-  if (!name) return;
-  const pos = S.participants.length + 1;
-  const { error } = await sb.from('pga_test_participants').insert({ user_id: S.userId, name, draft_position: pos });
-  if (error) { showToast('Fehler: ' + error.message); return; }
-  document.getElementById('inputParticipantName').value = '';
-  closeModal('modalParticipant');
-  await loadAll();
-  render();
-  showToast(name + ' hinzugefügt');
-}
-
-async function removeParticipant(id) {
-  if (!confirm('Mitspieler wirklich entfernen?')) return;
-  await sb.from('pga_test_participants').delete().eq('id', id);
-  await loadAll();
-  render();
-  showToast('Entfernt');
-}
-
-async function updateDraftPosition(id, value) {
-  const pos = parseInt(value);
-  if (isNaN(pos) || pos < 1) return;
-  await sb.from('pga_test_participants').update({ draft_position: pos }).eq('id', id);
-  await loadAll();
-  render();
-}
-
-async function randomizeDraftOrder() {
-  const ids = S.participants.map(p => p.id);
-  // Fisher-Yates shuffle
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-  }
-  for (let i = 0; i < ids.length; i++) {
-    await sb.from('pga_test_participants').update({ draft_position: i + 1 }).eq('id', ids[i]);
-  }
-  await loadAll();
-  render();
-  showToast('Draft Reihenfolge ausgelost!');
-}
-
-function openDraftPickModal() {
-  S.draftModalOpen = true;
-  const sel = document.getElementById('selectDraftTeam');
-  sel.innerHTML = S.participants
-    .sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99))
-    .map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-
-  // Auto-determine next pick
-  const totalPicks = S.golfers.length;
-  const n = S.participants.length;
-  if (n > 0) {
-    const round = Math.floor(totalPicks / n) + 1;
-    const pickInRound = totalPicks % n;
-    const isReverse = round % 2 === 0;
-    const ordered = [...S.participants].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
-    const nextIdx = isReverse ? (n - 1 - pickInRound) : pickInRound;
-    if (nextIdx >= 0 && nextIdx < ordered.length) {
-      sel.value = ordered[nextIdx].id;
-    }
-    document.getElementById('selectDraftRound').value = Math.min(round, 5);
-  }
-
-  document.getElementById('inputGolferName').value = '';
-  document.getElementById('inputGolferSearch').value = '';
-  filterFieldList();
-  openModal('modalDraftPick');
-}
-
-async function addDraftPick() {
-  const name = document.getElementById('inputGolferName').value.trim();
-  const pid = document.getElementById('selectDraftTeam').value;
-  const round = parseInt(document.getElementById('selectDraftRound').value);
-  if (!name || !pid) return;
-  const existingInRound = S.golfers.filter(g => g.draft_round === round).length;
-  const { error } = await sb.from('pga_test_golfers').insert({
-    user_id: S.userId, name, participant_id: pid,
-    draft_round: round, draft_pick: existingInRound + 1
-  });
-  if (error) { showToast('Fehler: ' + error.message); return; }
-  closeModal('modalDraftPick');
-  await loadAll();
-  render();
-  showToast(name + ' gedraftet');
-}
-
-async function saveScore(golferId, round, value) {
-  const score = parseInt(value);
-  if (isNaN(score)) {
-    // Delete existing score
-    await sb.from('pga_test_scores').delete().eq('golfer_id', golferId).eq('round', round);
-  } else {
-    const existing = S.scores.find(s => s.golfer_id === golferId && s.round === round);
-    if (existing) {
-      await sb.from('pga_test_scores').update({ score }).eq('id', existing.id);
-    } else {
-      await sb.from('pga_test_scores').insert({ user_id: S.userId, golfer_id: golferId, round, score });
-    }
-  }
-  await loadAll();
-  renderLeaderboard();
-}
-
-async function toggleCut(golferId) {
-  const g = S.golfers.find(x => x.id === golferId);
-  if (!g) return;
-  await sb.from('pga_test_golfers').update({ made_cut: !g.made_cut }).eq('id', golferId);
-  await loadAll();
-  render();
-}
-
-async function addBonus() {
-  const golferId = document.getElementById('selectBonusGolfer').value;
-  const type = document.getElementById('selectBonusType').value;
-  const shots = type === 'par3_win' ? 2 : 1;
-  // Find participant from golfer
-  const golfer = S.golfers.find(g => g.id === golferId);
-  const pid = golfer ? golfer.participant_id : null;
-  const { error } = await sb.from('pga_test_bonuses').insert({
-    user_id: S.userId, golfer_id: golferId, participant_id: pid,
-    bonus_type: type, shots
-  });
-  if (error) { showToast('Fehler: ' + error.message); return; }
-  await loadAll();
-  applyLiveScores();
-  render();
-  showToast('Bonus für ' + (golfer ? golfer.name : '') + ' hinzugefügt');
-}
-
-async function removeBonus(id) {
-  await sb.from('pga_test_bonuses').delete().eq('id', id);
-  await loadAll();
-  applyLiveScores();
-  render();
-  showToast('Bonus entfernt');
-}
-
-
-/* ===================== Scorecard ===================== */
-/* ===================== Tournament Leaderboard ===================== */
-function renderTournament() {
-  const list = document.getElementById('tournamentList');
-  if (!list) return;
-  let entries = Object.entries(S.liveScores);
-  // Fallback: if no ESPN data but frozen scores exist, build leaderboard from Supabase data
-  if (entries.length === 0 && S.scores.length > 0 && localStorage.getItem('pga_test_frozen')) {
-    const synthScores = {};
-    for (const g of S.golfers) {
-      const rounds = {};
-      let totalPar = 0;
-      let hasScores = false;
-      for (let r = 1; r <= 4; r++) {
-        const sc = S.scores.find(s => s.golfer_id === g.id && s.round === r);
-        if (sc && sc.score > 0) { rounds['r' + r] = sc.score; totalPar += sc.score - PAR; hasScores = true; }
-      }
-      if (hasScores) {
-        synthScores[g.name] = { ...rounds, toPar: totalPar, status: g.made_cut ? 'active' : 'cut', finished: true, currentRound: 0, thru: '', madeCut: g.made_cut, headshot: '' };
-      }
-    }
-    S.liveScores = synthScores;
-    entries = Object.entries(synthScores);
-  }
-  if (entries.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">&#9971;</div><h3>Keine Live-Daten</h3><p>Das Turnier hat noch nicht begonnen oder die Daten werden geladen.</p></div>';
-    return;
-  }
-
-  const filterEl = document.getElementById('tournamentFilter');
-  const filter = normalizeName(filterEl?.value || '');
-  // Show/hide clear button
-  const clearBtn = document.getElementById('tournamentFilterClear');
-  if (clearBtn) clearBtn.style.display = filterEl?.value?.trim() ? 'flex' : 'none';
-
-  // Build FULL player list (unfiltered) for rank computation
-  let allPlayers = entries.map(([name, data]) => {
-    const draftedGolfer = S.golfers.find(g => normalizeName(g.name) === normalizeName(name));
-    const team = draftedGolfer ? S.participants.find(p => p.id === draftedGolfer.participant_id) : null;
-    const manualStatus = draftedGolfer ? golferStatus(draftedGolfer) : null;
-    if (manualStatus === 'wd') data = { ...data, status: 'wd' };
-    return { name, data, team: team ? team.name : null };
-  });
-
-  // Sort: active first by toPar, then cut, then WD
-  allPlayers.sort((a, b) => {
-    const aOrder = a.data.status === 'wd' ? 2 : a.data.status === 'cut' ? 1 : 0;
-    const bOrder = b.data.status === 'wd' ? 2 : b.data.status === 'cut' ? 1 : 0;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.data.toPar - b.data.toPar;
-  });
-
-  // Compute ranks on FULL list — rank stored on each player
-  let rank = 0, prevScore = null;
-  allPlayers.forEach((p, i) => {
-    const isOut = p.data.status === 'wd' || p.data.status === 'cut';
-    if (!isOut && p.data.toPar !== prevScore) { rank = i + 1; prevScore = p.data.toPar; }
-    p._rank = isOut ? 0 : rank;
-  });
-
-  // Apply search filter
-  let players = filter
-    ? allPlayers.filter(p => fuzzyMatch(p.name, filter) || (p.team && fuzzyMatch(p.team, filter)))
-    : allPlayers;
-
-  // Compute _showRank on display list (show rank for first at each score)
-  let shownRanks = new Set();
-  players.forEach(p => {
-    const isOut = p.data.status === 'wd' || p.data.status === 'cut';
-    p._showRank = !isOut && !shownRanks.has(p._rank);
-    if (!isOut) shownRanks.add(p._rank);
-  });
-
-  function renderTournamentEntry(p) {
-    const isWD = p.data.status === 'wd';
-    const isCut = p.data.status === 'cut';
-    const isOut = isWD || isCut;
-    const isFav = S.favorites && S.favorites.has(p.name);
-    const isMine = S.myName && p.team === S.myName;
-    const starSvg = isFav
-      ? `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`
-      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
-    const favBtn = `<button class="fav-btn${isFav ? ' active' : ''}" onclick="toggleFavorite('${esc(p.name)}', event)">${starSvg}</button>`;
-
-    const nameParts = p.name.trim().split(' ');
-    const shortName = nameParts.length > 1 ? nameParts.slice(1).join(' ') + ' ' + nameParts[0][0] + '.' : p.name;
-    const teamBadge = p.team ? `<div style="font-size:10px;color:var(--gold);margin-top:1px">${esc(p.team)}</div>` : '';
-    const mineStyle = isMine && !isOut ? 'border-color:var(--green);background:linear-gradient(135deg,rgba(27,58,92,.06),#fff)' : '';
-
-    if (isOut) {
-      const badge = isWD ? 'WD' : 'MC';
-      const rounds = [1,2,3,4].map(r => {
-        const sc = p.data['r' + r];
-        if (!sc) return '<span style="color:var(--text3)">\u2014</span>';
-        const rel = sc - PAR;
-        return `<span style="color:${rel < 0 ? '#E63946' : rel === 0 ? '#2563EB' : '#000'};font-weight:500">${sc}</span>`;
-      });
-      return `<div class="lb-entry" style="opacity:0.4;cursor:${isCut ? 'pointer' : 'default'};flex-wrap:nowrap" ${isCut ? `onclick="showScorecardByName('${esc(p.name)}')"` : ''}>
-        ${favBtn}
-        <div class="lb-rank" style="width:28px;flex-shrink:0">\u2014</div>
-        <div style="flex:1;min-width:0;overflow:hidden">
-          <div style="font-weight:600;font-size:12px">${esc(shortName)}</div>
-          ${teamBadge}
-        </div>
-        <div style="display:flex;gap:3px;align-items:center;font-size:12px;flex-shrink:0;margin-left:4px">
-          ${rounds.map(r => `<div style="width:26px;text-align:center">${r}</div>`).join('')}
-        </div>
-        <div style="width:42px;text-align:right;flex-shrink:0">
-          <div style="font-size:11px;font-weight:600;color:var(--red)">${badge}</div>
-          <div style="font-size:10px;color:var(--text3)">${fmtScore(p.data.toPar)}</div>
-        </div>
-      </div>`;
-    }
-
-    const scoreCls = p.data.toPar < 0 ? 'under' : p.data.toPar > 0 ? 'over' : 'even';
-    const rounds = [1,2,3,4].map(r => {
-      if (p.data.currentRound === r && !p.data.finished) {
-        const rtp = p.data['r' + r + '_toPar'] !== undefined ? p.data['r' + r + '_toPar'] : p.data.toPar;
-        const liveColor = rtp < 0 ? '#E63946' : rtp === 0 ? '#2563EB' : '#000';
-        return `<span style="font-size:10px;color:${liveColor};font-weight:600">${fmtScore(rtp)}<span style="font-size:8px;color:var(--text3);font-weight:400;display:block">${p.data.thru}</span></span>`;
-      }
-      const sc = p.data['r' + r];
-      if (!sc) return '<span style="color:var(--text3)">\u2014</span>';
-      const rel = sc - PAR;
-      return `<span style="color:${rel < 0 ? '#E63946' : rel === 0 ? '#2563EB' : '#000'};font-weight:500">${sc}</span>`;
-    });
-
-    return `<div class="lb-entry" style="cursor:pointer;flex-wrap:nowrap;${mineStyle}" onclick="showScorecardByName('${esc(p.name)}')">
-      ${favBtn}
-      <div class="lb-rank" style="width:28px;flex-shrink:0">${p._showRank ? p._rank : ''}</div>
-      <div style="flex:1;min-width:0;overflow:hidden">
-        <div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(shortName)}</div>
-        ${teamBadge}
-      </div>
-      <div style="display:flex;gap:3px;align-items:center;font-size:12px;flex-shrink:0;margin-left:4px">
-        ${rounds.map(r => `<div style="width:26px;text-align:center">${r}</div>`).join('')}
-      </div>
-      <div style="width:42px;text-align:right;flex-shrink:0">
-        <div class="lb-total ${scoreCls}" style="font-size:20px">${fmtScore(p.data.toPar)}</div>
-      </div>
-    </div>`;
-  }
-
-  // Split into favorites and rest
-  const favNames = S.favorites || new Set();
-  const favPlayers = players.filter(p => favNames.has(p.name));
-  const restPlayers = players.filter(p => !favNames.has(p.name));
-
-  // Compute _showRank within favorites section (shared ranks like full leaderboard)
-  let favShownRanks = new Set();
-  favPlayers.forEach(p => {
-    const isOut = p.data.status === 'wd' || p.data.status === 'cut';
-    p._showRankFav = !isOut && !favShownRanks.has(p._rank);
-    if (!isOut) favShownRanks.add(p._rank);
-  });
-
-  let html = '';
-  if (filter) {
-    // During search: show all matching players in one flat list
-    html += players.map(renderTournamentEntry).join('');
-  } else {
-    if (favPlayers.length > 0) {
-      const MAX_FAV_SHOW = 5;
-      const showAll = S._showAllFavs || favPlayers.length <= MAX_FAV_SHOW;
-      const visibleFavs = showAll ? favPlayers : favPlayers.slice(0, MAX_FAV_SHOW);
-      html += '<div class="fav-divider">Favoriten</div>';
-      html += visibleFavs.map(p => {
-        const saved = p._showRank;
-        p._showRank = p._showRankFav;
-        const h = renderTournamentEntry(p);
-        p._showRank = saved;
-        return h;
-      }).join('');
-      if (!showAll) {
-        html += `<div style="text-align:center;padding:8px 0 4px"><span style="font-size:13px;color:var(--green);cursor:pointer;font-weight:500" onclick="S._showAllFavs=true;renderTournament()">Alle ${favPlayers.length} Favoriten zeigen</span></div>`;
-      }
-      html += '<div class="fav-divider">Alle Spieler</div>';
-    }
-    html += restPlayers.map(renderTournamentEntry).join('');
-  }
-
-  list.innerHTML = html;
-}
-
-function buildScorecardHeader(name, teamName, headshot) {
-  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  const avatarHtml = headshot
-    ? `<img class="scorecard-avatar" src="${headshot}" alt="" onerror="this.outerHTML='<div class=\\'scorecard-avatar-fallback\\'>${initials}</div>'">`
-    : `<div class="scorecard-avatar-fallback">${initials}</div>`;
-  const teamInfo = teamName ? `<div style="font-size:13px;color:var(--gold);font-weight:400;margin-top:1px">${esc(teamName)}</div>` : '';
-  return `<div class="scorecard-header">${avatarHtml}<div class="scorecard-header-info"><div style="font-family:var(--font-display);font-size:20px;font-weight:600">${esc(name)}</div>${teamInfo}</div></div>`;
-}
-
-function showScorecardByName(playerName) {
-  const data = S.liveScores[playerName];
-  if (!data || !data.holes) {
-    showToast('Keine Loch-Daten verfügbar');
-    return;
-  }
-  const draftedGolfer = S.golfers.find(g => normalizeName(g.name) === normalizeName(playerName));
-  const team = draftedGolfer ? S.participants.find(p => p.id === draftedGolfer.participant_id) : null;
-
-  document.getElementById('scorecardTitle').innerHTML = buildScorecardHeader(playerName, team?.name, data.headshot);
-  renderScorecardContent(data);
-  openModal('modalScorecard');
-}
-
-function showScorecard(golferId) {
-  const golfer = S.golfers.find(g => g.id === golferId);
-  if (!golfer || !golfer._live || !golfer._live.holes) {
-    showToast('Keine Loch-Daten verfügbar');
-    return;
-  }
-  const team = S.participants.find(p => p.id === golfer.participant_id);
-
-  document.getElementById('scorecardTitle').innerHTML = buildScorecardHeader(golfer.name, team?.name, golfer._live?.headshot);
-  renderScorecardContent(golfer._live);
-  openModal('modalScorecard');
-}
-
-function renderScorecardContent(live) {
-  let html = '';
-
-  function holeClass(relPar) {
-    if (!relPar || relPar === 'E') return 'sc-par';
-    const v = parseInt(relPar);
-    if (isNaN(v)) return 'sc-par';
-    if (v <= -2) return 'sc-eagle';
-    if (v === -1) return 'sc-birdie';
-    if (v === 1) return 'sc-bogey';
-    if (v >= 2) return 'sc-dbl';
-    return 'sc-par';
-  }
-
-  function getHolePar(hole) {
-    if (!hole || !hole.score || !hole.par) return null;
-    const rel = hole.par === 'E' ? 0 : parseInt(hole.par);
-    if (isNaN(rel)) return null;
-    return Math.round(hole.score) - rel;
-  }
-
-  // Find which rounds have data
-  const activeRounds = [];
-  for (let r = 1; r <= 4; r++) {
-    const rh = live.holes['r' + r];
-    if (rh && rh.length > 0) activeRounds.push(r);
-  }
-
-  if (activeRounds.length === 0) {
-    html = '<p style="color:var(--text3);text-align:center;padding:20px">Noch keine Loch-Daten verfügbar</p>';
-  } else {
-    // Get par from first round with data (par is the same every round)
-    const parSource = live.holes['r' + activeRounds[0]];
-
-    function buildNine(start, end, label, hasExtraCol, fillExtra) {
-      let h = '<table class="scorecard"><tr><th></th>';
-      for (let i = start; i <= end; i++) h += `<th>${i}</th>`;
-      h += `<th>${label}</th>`;
-      if (hasExtraCol) h += `<th>${fillExtra ? 'Tot' : ''}</th>`;
-      h += '</tr>';
-
-      // Par row
-      h += '<tr><td class="hole-num">Par</td>';
-      let parTotal = 0;
-      for (let i = start; i <= end; i++) {
-        const hole = parSource.find(x => x.hole === i);
-        const p = getHolePar(hole);
-        if (p) { h += `<td style="color:var(--text3)">${p}</td>`; parTotal += p; }
-        else h += '<td></td>';
-      }
-      h += `<td style="font-weight:600;color:var(--text3)">${parTotal || ''}</td>`;
-      if (hasExtraCol) h += `<td style="font-weight:600;color:var(--text3)">${fillExtra ? PAR : ''}</td>`;
-      h += '</tr>';
-
-      // One row per round
-      for (const r of activeRounds) {
-        const roundHoles = live.holes['r' + r];
-        const roundScore = live['r' + r];
-
-        h += `<tr><td class="hole-num" style="font-weight:600;color:var(--green)">R${r}</td>`;
-        let total = 0;
-        let hasScore = false;
-        for (let i = start; i <= end; i++) {
-          const hole = roundHoles ? roundHoles.find(x => x.hole === i) : null;
-          if (hole && hole.score) {
-            total += hole.score;
-            hasScore = true;
-            h += `<td><span class="${holeClass(hole.par)}">${Math.round(hole.score)}</span></td>`;
-          } else {
-            h += '<td style="color:var(--text3)">\u2014</td>';
-          }
-        }
-        h += `<td style="font-weight:700">${hasScore ? Math.round(total) : '\u2014'}</td>`;
-        if (hasExtraCol) h += `<td style="font-weight:700">${fillExtra && roundScore ? roundScore : ''}</td>`;
-        h += '</tr>';
-      }
-
-      h += '</table>';
-      return h;
-    }
-
-    // Totals summary
-    html += '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
-    html += `<div style="font-size:13px;color:var(--text2)">Gesamt: <strong style="color:var(--green)">${fmtScore(live.toPar)}</strong></div>`;
-    for (const r of activeRounds) {
-      const sc = live['r' + r];
-      const tp = sc ? sc - PAR : null;
-      html += `<div style="font-size:13px;color:var(--text3)">R${r}: ${tp !== null ? fmtScore(tp) : (live.currentRound === r ? fmtScore(live.toPar) + ' (' + live.thru + ')' : '\u2014')}</div>`;
-    }
-    html += '</div>';
-
-    html += buildNine(1, 9, 'OUT', true, false);
-    html += '<div style="height:4px"></div>';
-    html += buildNine(10, 18, 'IN', true, true);
-  }
-
-  document.getElementById('scorecardContent').innerHTML = html;
 }
 
 /* ===================== UI Helpers ===================== */
@@ -3459,519 +2038,22 @@ function shortName(fullName) {
   return parts.slice(1).join(' ') + ' ' + parts[0][0] + '.';
 }
 
-/* ===================== Masters Field ===================== */
-async function fetchMastersField() {
-  // 1. Try Supabase first (pre-seeded field, available before tournament)
-  try {
-    const { data, error } = await sb.from('pga_test_field').select('name, country').order('name');
-    if (!error && data && data.length > 0) {
-      S.pgaTestField = data;
-      S.fieldLoaded = true;
-      return;
-    }
-  } catch (err) {
-    console.warn('Supabase field fetch failed:', err);
-  }
-
-  // 2. Fallback: ESPN live data (only available during tournament week)
-  try {
-    const resp = await fetch(ESPN_GOLF_URL);
-    if (!resp.ok) return;
-    const json = await resp.json();
-    const events = json.events || [];
-    let evt = events.find(e =>
-      e.name && (e.name.toLowerCase().includes('masters') || e.name.toLowerCase().includes('augusta'))
-    );
-    if (!evt && events.length > 0) evt = events[0];
-    if (!evt) return;
-
-    const comp = (evt.competitions || [])[0];
-    if (!comp) return;
-
-    const field = [];
-    for (const c of (comp.competitors || [])) {
-      const athlete = c.athlete || {};
-      const name = athlete.displayName || athlete.shortName || '';
-      if (!name) continue;
-      const country = athlete.flag?.alt || '';
-      field.push({ name, country });
-    }
-    if (field.length === 0) return;
-    field.sort((a, b) => a.name.localeCompare(b.name));
-    S.pgaTestField = field;
-    S.fieldLoaded = true;
-  } catch (err) {
-    console.warn('ESPN field fetch failed:', err);
-  }
-}
-
-function getAvailableField() {
-  const drafted = new Set(S.golfers.map(g => normalizeName(g.name)));
-  return S.pgaTestField.map(p => ({
-    ...p,
-    isDrafted: drafted.has(normalizeName(p.name))
-  }));
-}
-
-function filterFieldList() {
-  const query = document.getElementById('inputGolferSearch').value.toLowerCase().trim();
-  const list = document.getElementById('fieldList');
-  const available = getAvailableField().filter(p => !p.isDrafted);
-  const selected = document.getElementById('inputGolferName').value;
-
-  let filtered = available;
-  if (query) {
-    filtered = available.filter(p => p.name.toLowerCase().includes(query));
-  }
-
-  if (filtered.length === 0 && query) {
-    list.innerHTML = `<div class="field-item" onclick="selectFieldPlayer('${esc(query)}',this)"
-      style="font-style:italic;color:var(--text2)">"${esc(query)}" manuell eingeben</div>`;
-    return;
-  }
-
-  list.innerHTML = filtered.map(p => {
-    const sel = normalizeName(p.name) === normalizeName(selected) ? 'selected' : '';
-    const isAmateur = /\(a\)\s*$/.test(p.name);
-    const cleanName = p.name.replace(/\s*\(a\)\s*$/, '');
-    const flag = p.country ? `<span class="field-status">${p.country}</span>` : '';
-    const aBadge = isAmateur ? ' <span style="font-size:10px;color:var(--text3)">(a)</span>' : '';
-    return `<div class="field-item ${sel}" onclick="selectFieldPlayer('${esc(p.name)}',this)">
-      ${esc(cleanName)}${aBadge}${flag}</div>`;
-  }).join('');
-}
-
-function selectFieldPlayer(name, el) {
-  document.getElementById('inputGolferName').value = name;
-  document.getElementById('inputGolferSearch').value = name;
-  // Update selection UI
-  document.querySelectorAll('#fieldList .field-item').forEach(item => item.classList.remove('selected'));
-  if (el) el.classList.add('selected');
-}
-
-/* ===================== Live Scoring (ESPN) ===================== */
-function normalizeName(name) {
-  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function fuzzyMatch(text, query) {
-  // Subsequence match: "inty" matches "macintyre"
-  if (!query) return true;
-  const t = normalizeName(text);
-  const q = normalizeName(query);
-  // First try substring (faster, preferred)
-  if (t.includes(q)) return true;
-  // Then try subsequence
-  let ti = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    while (ti < t.length && t[ti] !== q[qi]) ti++;
-    if (ti >= t.length) return false;
-    ti++;
-  }
-  return true;
-}
-
-function matchGolferToLive(golferName) {
-  const norm = normalizeName(golferName);
-  const parts = norm.split(' ');
-  // Try exact match first
-  for (const [liveName, data] of Object.entries(S.liveScores)) {
-    if (normalizeName(liveName) === norm) return data;
-  }
-  // Try last-name match (golf names are often just last names)
-  const lastName = parts[parts.length - 1];
-  const matches = [];
-  for (const [liveName, data] of Object.entries(S.liveScores)) {
-    const liveParts = normalizeName(liveName).split(' ');
-    const liveLastName = liveParts[liveParts.length - 1];
-    if (liveLastName === lastName) matches.push({ liveName, data });
-  }
-  if (matches.length === 1) return matches[0].data;
-  // Try first initial + last name
-  if (parts.length >= 2) {
-    const firstInit = parts[0][0];
-    for (const m of matches) {
-      const fn = normalizeName(m.liveName).split(' ')[0];
-      if (fn[0] === firstInit) return m.data;
-    }
-  }
-  // No partial match — too many false positives (e.g. "Coody" matching random names)
-  return null;
-}
-
-async function fetchLiveScores() {
-  try {
-    const resp = await fetch(ESPN_GOLF_URL);
-    if (!resp.ok) return;
-    const json = await resp.json();
-    const events = json.events || [];
-    // Find The Masters (or current/most relevant tournament)
-    let mastersEvent = events.find(e =>
-      e.name && (e.name.toLowerCase().includes('masters') || e.name.toLowerCase().includes('augusta'))
-    );
-    // If no Masters found, use the first active event
-    if (!mastersEvent && events.length > 0) mastersEvent = events[0];
-    if (!mastersEvent) { updateLiveBadge(false); return; }
-
-    S.liveEventName = mastersEvent.name || 'Tournament';
-    const eventState = mastersEvent.status?.type?.state || '';
-    S.tournamentLive = eventState === 'in';
-    S.tournamentFinished = eventState === 'post';
-
-    const competitions = mastersEvent.competitions || [];
-    if (competitions.length === 0) { updateLiveBadge(false); return; }
-
-    const comp = competitions[0];
-    const competitors = comp.competitors || [];
-    const scores = {};
-
-    for (const c of competitors) {
-      const athlete = c.athlete || {};
-      const rawName = athlete.displayName || athlete.shortName || '';
-      if (!rawName) continue;
-      const isAmateur = /\(a\)\s*$/.test(rawName);
-      const name = rawName.replace(/\s*\(a\)\s*$/, '');
-
-      const linescores = c.linescores || [];
-      const roundScores = {};
-      const holes = {};
-      let currentRound = 0;
-      let finished = true;
-      let thruHoles = '';
-
-      for (let i = 0; i < linescores.length && i < 4; i++) {
-        const roundData = linescores[i];
-        const dv = roundData.displayValue;
-        const roundHoles = roundData.linescores || [];
-        const holesPlayed = roundHoles.length;
-
-        // Store hole-by-hole data
-        if (holesPlayed > 0) {
-          holes['r' + (i + 1)] = roundHoles.map(h => ({
-            hole: h.period,
-            score: h.value,
-            par: h.scoreType ? h.scoreType.displayValue : null
-          }));
-        }
-
-        if (dv !== undefined && dv !== null) {
-          const roundToPar = dv === 'E' ? 0 : parseInt(dv);
-          if (!isNaN(roundToPar)) {
-            if (holesPlayed >= 18) {
-              // Round complete — store final score
-              roundScores['r' + (i + 1)] = PAR + roundToPar;
-            } else if (holesPlayed > 0) {
-              // Mid-round — don't store as final score
-              currentRound = i + 1;
-              finished = false;
-              thruHoles = '' + holesPlayed;
-              roundScores['r' + (i + 1) + '_toPar'] = roundToPar; // store round toPar for display
-            }
-          }
-        }
-      }
-
-      // Status/thru info
-      const status = c.status || {};
-      const statusThru = status.displayValue || '';
-      const statusType = status.type?.name || '';
-      const totalToPar = c.score === 'E' ? 0 : parseInt(c.score) || 0;
-      const thru = statusThru || thruHoles;
-
-      // Detect missed cut (fallback): ESPN status or old linescore heuristic
-      const maxRounds = linescores.length;
-      const completedRounds = Object.keys(roundScores).filter(k => !k.includes('toPar')).length;
-      const isCut = (statusType && statusType.toLowerCase() === 'cut') ||
-                    (maxRounds <= 2 && completedRounds >= 2 && currentRound === 0 && finished);
-
-      scores[name] = {
-        ...roundScores,
-        holes,
-        toPar: totalToPar,
-        thru: thru,
-        status: isCut ? 'cut' : statusType,
-        madeCut: !isCut,
-        _amateur: isAmateur,
-        currentRound,
-        finished: finished,
-        headshot: c.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/golf/players/full/${c.id}.png&w=96&h=70` : ''
-      };
-    }
-
-    // Auto-detect cut: Top CUT_TOP + Ties (amateurs don't count toward spots)
-    // Only calculate when ALL players have completed R2 (nobody mid-round)
-    const allScores = Object.values(scores);
-    const anyoneMidRound = allScores.some(s => !s.finished && s.currentRound > 0);
-    const withR2 = allScores.filter(s => s.r1 && s.r2);
-    if (!anyoneMidRound && withR2.length > CUT_TOP) {
-      const sorted = [...withR2].sort((a, b) => a.toPar - b.toPar);
-      let proCount = 0;
-      let cutScore = null;
-      for (const s of sorted) {
-        if (!s._amateur) proCount++;
-        if (proCount === CUT_TOP) { cutScore = s.toPar; break; }
-      }
-      if (cutScore === null) cutScore = sorted[sorted.length - 1].toPar;
-      for (const [n, s] of Object.entries(scores)) {
-        if (s.r1 && s.r2 && s.toPar > cutScore && s.status !== 'cut') {
-          s.status = 'cut';
-          s.madeCut = false;
-        }
-      }
-    }
-
-    S.liveScores = scores;
-    S.liveLastUpdate = new Date();
-    // Show "Live" only when ESPN says event is "in" AND at least one player is mid-round
-    const anyonePlaying = S.tournamentLive && Object.values(scores).some(s => !s.finished && s.currentRound > 0);
-    S.liveActive = anyonePlaying;
-    updateLiveBadge(anyonePlaying);
-    applyLiveScores();
-    // Preload headshot images in background
-    Object.values(scores).forEach(s => { if (s.headshot) { new Image().src = s.headshot; } });
-    // Freeze final scores to Supabase when tournament ends
-    if (S.tournamentFinished && !localStorage.getItem('pga_test_frozen')) {
-      freezeFinalScores();
-    }
-    // Auto-finish pool 5 min after tournament ends
-    if (S.tournamentFinished && S.activePool && S.activePool.status === 'active') {
-      const pendingKey = 'pool_finish_pending_' + S.activePool.id;
-      const pendingSince = localStorage.getItem(pendingKey);
-      if (!pendingSince) {
-        localStorage.setItem(pendingKey, Date.now().toString());
-      } else if (Date.now() - parseInt(pendingSince) > 5 * 60 * 1000) {
-        localStorage.removeItem(pendingKey);
-        finishPool();
-      }
-    }
-    render();
-  } catch (err) {
-    console.warn('Live scoring fetch failed:', err);
-    S.liveActive = false;
-    updateLiveBadge(false);
-  }
-}
-
-async function freezeFinalScores() {
-  // Save all ESPN round scores to Supabase so they persist after ESPN moves to next event
-  const upserts = [];
-  for (const g of S.golfers) {
-    const live = matchGolferToLive(g.name);
-    if (!live) continue;
-    // Save round scores
-    for (let r = 1; r <= 4; r++) {
-      const sc = live['r' + r];
-      if (!sc) continue;
-      // Skip if manual score already exists
-      const existing = S.scores.find(s => s.golfer_id === g.id && s.round === r);
-      if (existing) continue;
-      upserts.push({ golfer_id: g.id, round: r, score: sc, user_id: 'auto-freeze' });
-    }
-    // Update made_cut based on ESPN data
-    if (live.status === 'cut' && g.made_cut) {
-      await sb.from('pga_test_golfers').update({ made_cut: false }).eq('id', g.id);
-    }
-  }
-  if (upserts.length > 0) {
-    await sb.from('pga_test_scores').insert(upserts);
-  }
-  localStorage.setItem('pga_test_frozen', '1');
-  // Reload scores from Supabase
-  await loadAll();
-  applyLiveScores();
-  render();
-  console.log('Tournament scores frozen to Supabase:', upserts.length, 'scores saved');
-}
-
-function applyLiveScores() {
-  for (const g of S.golfers) {
-    const live = matchGolferToLive(g.name);
-    if (!live) continue;
-    g._live = live;
-    g._liveMatched = true;
-    if (live.status === 'cut' && g.made_cut) {
-      g._liveCut = true;
-      g.made_cut = false;
-      sb.from('pga_test_golfers').update({ made_cut: false }).eq('id', g.id);
-    }
-  }
-}
-
-
-function updateLiveBadge(active) {
+function updateLiveBadge() {
   const badge = document.getElementById('liveBadge');
-  const text = document.getElementById('liveText');
-  // Hide badge before tournament or after it's finished
-  if (!S.tournamentLive && !S.tournamentFinished && new Date() < TOURNAMENT_START) {
-    badge.style.display = 'none';
-    return;
-  }
-  if (S.tournamentFinished) {
-    badge.style.display = 'inline-flex';
-    badge.classList.add('stale');
-    text.textContent = 'Beendet';
-    return;
-  }
-  badge.style.display = 'inline-flex';
-  if (active && S.liveLastUpdate) {
-    badge.classList.remove('stale');
-    text.textContent = 'Live';
-  } else if (S.tournamentLive) {
-    badge.classList.add('stale');
-    text.textContent = 'Pause';
-  } else {
-    badge.style.display = 'none';
-  }
+  if (badge) badge.style.display = 'none';
 }
 
 function startLiveRefresh() {
-  fetchMastersField();
-  fetchLiveScores();
-  S.liveTimer = setInterval(fetchLiveScores, LIVE_REFRESH_MS);
-  setInterval(() => {
-    updateLiveBadge(S.liveActive);
-    // Adjust polling: 30s when live, 10min when pre, stop when post
-    let desired;
-    if (S.tournamentFinished) desired = 0;
-    else if (S.tournamentLive) desired = LIVE_REFRESH_MS;
-    else desired = IDLE_REFRESH_MS;
-    if (S._currentInterval !== desired) {
-      clearInterval(S.liveTimer);
-      if (desired > 0) S.liveTimer = setInterval(fetchLiveScores, desired);
-      S._currentInterval = desired;
+  // Phase 1: kein ESPN-Scraping mehr — wird in Phase 2 vom Worker übernommen
+  // Polling für tournament_golfers Updates
+  setInterval(async () => {
+    if (S.activePool && S.activePool.tournament_id) {
+      await loadTournament();
+      if (S.activeTab === 'leaderboard' || S.activeTab === 'rangliste') render();
     }
-  }, 30000);
+  }, 60000);
 }
 
-
-/* ===================== Push Notifications ===================== */
-const VAPID_PUBLIC = 'BI69ibPpigizZExp4HprtpKc2KN5Hm3EufVvZovroOcFyebHXLnT7anSwj74HZUiw8C87PhrJpe9l-mbY28eJA4';
-
-async function initServiceWorker() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  try {
-    await navigator.serviceWorker.register('sw.js');
-  } catch(e) { console.warn('SW registration failed:', e); }
-}
-
-async function subscribePush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    showToast('Push Notifications werden auf diesem Gerät nicht unterstützt');
-    return;
-  }
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    showToast('Benachrichtigungen wurden blockiert');
-    return;
-  }
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
-    });
-    const json = sub.toJSON();
-    const myP = S.participants.find(p => p.name === S.myName);
-    if (!myP) { showToast('Bitte zuerst deinen Namen auswählen'); return; }
-
-    // Save to Supabase
-    const { error } = await sb.from('pga_test_push_subscriptions').upsert({
-      participant_id: myP.id,
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth
-    }, { onConflict: 'endpoint' });
-
-    if (error) { showToast('Fehler beim Speichern: ' + error.message); return; }
-    localStorage.setItem('pga_test_push', 'true');
-    S.pushEnabled = true;
-    showToast('Benachrichtigungen aktiviert!');
-    updatePushUI();
-  } catch(e) {
-    console.error('Push subscribe error:', e);
-    showToast('Fehler: ' + e.message);
-  }
-}
-
-async function unsubscribePush() {
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      const endpoint = sub.endpoint;
-      await sub.unsubscribe();
-      await sb.from('pga_test_push_subscriptions').delete().eq('endpoint', endpoint);
-    }
-    localStorage.removeItem('pga_test_push');
-    S.pushEnabled = false;
-    showToast('Benachrichtigungen deaktiviert');
-    updatePushUI();
-  } catch(e) { console.warn('Unsubscribe error:', e); }
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-}
-
-function togglePushDropdown() {
-  const dd = document.getElementById('pushDropdown');
-  if (dd.classList.contains('open')) { dd.classList.remove('open'); return; }
-
-  const myTeam = S.pushEnabled ? 'checked' : '';
-  const myFavs = S.pushFavs ? 'checked' : '';
-
-  dd.innerHTML = `
-    <div style="padding:12px 16px;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;border-bottom:1px solid var(--border)">Benachrichtigungen</div>
-    <label class="id-option" style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="event.stopPropagation()">
-      <input type="checkbox" ${myTeam} onchange="togglePushOption('team', this.checked)" style="width:18px;height:18px;accent-color:var(--green)">
-      <div><div style="font-weight:600;font-size:13px">Meine Spieler</div><div style="font-size:11px;color:var(--text3)">Eagles & Doppel-Bogeys</div></div>
-    </label>
-    <label class="id-option" style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="event.stopPropagation()">
-      <input type="checkbox" ${myFavs} onchange="togglePushOption('favs', this.checked)" style="width:18px;height:18px;accent-color:var(--green)">
-      <div><div style="font-weight:600;font-size:13px">Favoriten</div><div style="font-size:11px;color:var(--text3)">Deine markierten Golfer</div></div>
-    </label>`;
-  dd.classList.add('open');
-  setTimeout(() => document.addEventListener('click', e => {
-    if (!e.target.closest('#pushDropdown') && !e.target.closest('#btnPush')) dd.classList.remove('open');
-  }, { once: true }), 10);
-}
-
-async function togglePushOption(type, enabled) {
-  if (type === 'team') {
-    if (enabled && !S.pushEnabled) {
-      await subscribePush();
-    } else if (!enabled && S.pushEnabled) {
-      await unsubscribePush();
-    }
-  } else if (type === 'favs') {
-    S.pushFavs = enabled;
-    localStorage.setItem('pga_test_push_favs', enabled ? 'true' : '');
-    // Update favorites in subscription
-    if (S.pushEnabled) {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        const favList = enabled ? [...(S.favorites || [])] : [];
-        await sb.from('pga_test_push_subscriptions')
-          .update({ favorites: favList })
-          .eq('endpoint', sub.endpoint);
-      }
-    }
-  }
-  updatePushUI();
-}
-
-function updatePushUI() {
-  const btn = document.getElementById('btnPush');
-  if (!btn) return;
-  const show = S.myName && ('PushManager' in window);
-  btn.style.display = show ? '' : 'none';
-  btn.classList.toggle('active', S.pushEnabled || S.pushFavs);
-}
 
 /* ===================== Onboarding ===================== */
 function isRunningStandalone() {
@@ -4122,21 +2204,17 @@ if (isRunningStandalone()) {
 
 /* ===================== Start ===================== */
 (async function boot() {
+  // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
+  document.getElementById('app').style.display = 'none';
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     await onAuthSuccess(session.user);
   } else {
-    // Show auth screen
     document.getElementById('authScreen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
   }
-  // Post-init tasks (run after app is visible)
   startLiveRefresh();
-  initServiceWorker();
-  S.pushEnabled = localStorage.getItem('pga_test_push') === 'true';
-  S.pushFavs = localStorage.getItem('pga_test_push_favs') === 'true';
+  if (typeof initServiceWorker === 'function') initServiceWorker();
 
-  // Onboarding
   if (!isRunningStandalone() && !hasSeenPWAPrompt()) {
     setTimeout(showPWAPrompt, 1500);
   } else if (!hasSeenTutorial()) {
