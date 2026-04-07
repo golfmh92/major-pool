@@ -2881,6 +2881,7 @@ function switchTab(tab) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  if (tab === 'profile') renderProfile();
   updateFab();
 }
 
