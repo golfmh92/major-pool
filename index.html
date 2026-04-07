@@ -987,6 +987,8 @@ async function onAuthSuccess(user) {
   S.userProfile = profile;
   // Set admin (keep existing admin logic)
   setAdmin(true, user.id);
+  // Profil-Tab einblenden, sobald eingeloggt
+  document.querySelector('.tab[data-tab="profile"]').classList.remove('hidden');
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('app').style.display = '';
   await initApp();
@@ -1125,7 +1127,7 @@ function updateTabs() {
   document.querySelectorAll('.tab').forEach(el => {
     const tab = el.dataset.tab;
     if (tab && tabConfig[tab] !== undefined) {
-      el.style.display = tabConfig[tab] ? '' : 'none';
+      el.classList.toggle('hidden', !tabConfig[tab]);
     }
   });
 }
