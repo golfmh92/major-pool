@@ -875,6 +875,13 @@ body::before{content:'';position:fixed;inset:0;background:
   </div>
 </div>
 
+<!-- Pool Result Modal -->
+<div class="modal-overlay" id="modalPoolResult">
+  <div class="modal">
+    <div id="poolResultContent"></div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1141,6 +1148,7 @@ function renderProfile() {
       <div style="font-weight:600">${esc(S.activePool.name)}</div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">${S.poolMembers.length} Teilnehmer &middot; ${S.activePool.entry_fee}&euro; Einsatz &middot; Status: ${S.activePool.status}</div>
       <button class="btn btn-primary btn-block" onclick="showInviteLink(S.activePool)" style="margin-top:10px;padding:10px;font-size:13px">Einladungslink teilen</button>
+      <button class="btn btn-secondary btn-block" onclick="sharePoolResult()" style="margin-top:6px;padding:10px;font-size:13px">Ergebnis teilen</button>
       ${isPoolAdmin && S.activePool.status === 'active' ? `<button class="btn btn-secondary btn-block" onclick="if(confirm('Pool wirklich abschlie&szlig;en?'))finishPool()" style="margin-top:6px;padding:10px;font-size:13px">Pool jetzt abschlie&szlig;en</button>` : ''}
     </div>`;
   } else {
@@ -1151,11 +1159,86 @@ function renderProfile() {
   }
 
   html += `<div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin:20px 0 8px">ABGESCHLOSSENE POOLS</div>`;
-  html += `<div id="poolArchive" style="color:var(--text3);font-size:13px;font-style:italic">Noch keine abgeschlossenen Pools</div>`;
+  html += `<div id="poolArchive" style="color:var(--text3);font-size:13px;font-style:italic">L&auml;dt...</div>`;
 
   html += `<button onclick="doLogout()" style="width:100%;margin-top:24px;padding:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Abmelden</button>`;
 
   c.innerHTML = html;
+  loadPoolArchive();
+}
+
+async function loadPoolArchive() {
+  if (!S.userId) return;
+  const { data } = await sb.from('pool_members')
+    .select('pool_id, pools(id, name, status, created_at)')
+    .eq('user_id', S.userId);
+  const finished = (data || []).filter(d => d.pools && d.pools.status === 'finished');
+  const el = document.getElementById('poolArchive');
+  if (!el) return;
+  if (finished.length === 0) {
+    el.innerHTML = '<div style="font-style:italic">Noch keine abgeschlossenen Pools</div>';
+    return;
+  }
+  el.innerHTML = finished
+    .sort((a, b) => new Date(b.pools.created_at) - new Date(a.pools.created_at))
+    .map(d => `
+    <div onclick="showPoolResult('${d.pools.id}')" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:6px;cursor:pointer;color:var(--text);font-style:normal">
+      <div style="font-weight:500">${esc(d.pools.name)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${new Date(d.pools.created_at).toLocaleDateString('de')}</div>
+    </div>
+  `).join('');
+}
+
+async function showPoolResult(poolId) {
+  const { data, error } = await sb.from('pool_results').select('snapshot').eq('pool_id', poolId).single();
+  if (error || !data) { showToast('Kein Ergebnis gefunden'); return; }
+  const snap = data.snapshot;
+
+  const fmtScoreLocal = (n) => {
+    if (n === null || n === undefined) return '—';
+    if (n === 0) return 'E';
+    return n > 0 ? '+' + n : '' + n;
+  };
+
+  const rankRows = snap.ranking.map((r, i) => {
+    const isMe = r.user_id === S.userId;
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+    return `<tr style="${isMe ? 'background:var(--green-dim);font-weight:600' : ''}">
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${medal}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border)">${esc(r.name)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--border);text-align:right;font-weight:600">${fmtScoreLocal(r.total)}</td>
+    </tr>`;
+  }).join('');
+
+  const payoutRows = (snap.payouts || []).map(p => `
+    <tr>
+      <td style="padding:6px 12px">Platz ${p.rank}</td>
+      <td style="padding:6px 12px;text-align:right;font-weight:600">€${p.amount.toFixed(2)}</td>
+    </tr>`).join('');
+
+  const html = `
+    <div class="modal-handle"></div>
+    <h3 style="font-family:var(--font-display);font-size:22px;color:var(--green);margin-bottom:4px">${esc(snap.name)}</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${new Date(snap.finished_at).toLocaleDateString('de')}</div>
+
+    <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">RANGLISTE</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:16px">
+      ${rankRows}
+    </table>
+
+    <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">PAYOUTS</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Pot: €${snap.pot.toFixed(2)}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+      ${payoutRows}
+    </table>
+
+    <div class="actions" style="margin-top:20px">
+      <button class="btn btn-primary btn-block" onclick="sharePoolResult('${poolId}')">Ergebnis teilen</button>
+      <button class="btn btn-secondary btn-block" onclick="closeModal('modalPoolResult')" style="margin-top:8px">Schlie&szlig;en</button>
+    </div>
+  `;
+  document.getElementById('poolResultContent').innerHTML = html;
+  openModal('modalPoolResult');
 }
 
 /* ===================== Pool Scoring ===================== */
@@ -1330,6 +1413,47 @@ function buildPoolSnapshot() {
     payouts,
     finished_at: new Date().toISOString()
   };
+}
+
+async function sharePoolResult(poolId) {
+  let snap;
+  if (poolId) {
+    // Aus Archiv laden
+    const { data } = await sb.from('pool_results').select('snapshot').eq('pool_id', poolId).single();
+    snap = data?.snapshot;
+  } else {
+    // Aktueller Pool
+    snap = buildPoolSnapshot();
+  }
+  if (!snap) { showToast('Kein Ergebnis verfügbar'); return; }
+
+  let text = `🏆 ${snap.name}\n\n`;
+  snap.ranking.slice(0, 8).forEach((r, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    const score = r.total === null ? '—' : (r.total === 0 ? 'E' : (r.total > 0 ? '+' + r.total : r.total));
+    text += `${medal} ${r.name} (${score})\n`;
+  });
+  text += `\n💰 Pot: €${snap.pot.toFixed(2)}`;
+  if (snap.payouts && snap.payouts.length > 0) {
+    text += `\n1. Platz: €${snap.payouts[0].amount.toFixed(2)}`;
+    if (snap.payouts[1]) text += `\n2. Platz: €${snap.payouts[1].amount.toFixed(2)}`;
+    if (snap.payouts[2]) text += `\n3. Platz: €${snap.payouts[2].amount.toFixed(2)}`;
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: snap.name, text });
+    } catch (e) {
+      if (e.name !== 'AbortError') console.warn(e);
+    }
+  } else {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Ergebnis in Zwischenablage kopiert');
+    } catch (e) {
+      showToast('Teilen nicht unterstützt');
+    }
+  }
 }
 
 async function finishPool() {
