@@ -55,6 +55,7 @@ body::before{content:'';position:fixed;inset:0;background:
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-body);font-size:10px;font-weight:600;color:var(--gold);letter-spacing:1px;margin-top:4px;text-transform:uppercase}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse-live 1.5s ease-in-out infinite}
 @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
 .live-badge.stale{color:rgba(255,255,255,.4)}
 .live-badge.stale .live-dot{background:rgba(255,255,255,.4);animation:none}
 .header-admin{position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);transition:all .2s}
@@ -2176,7 +2177,8 @@ function render() {
   if (S.activePool) {
     renderLeaderboard();
     renderPayoutsView();
-    if (S.isAdmin) { renderDraft(); renderAdmin(); renderAdminBonus(); }
+    renderDraft();
+    if (S.isAdmin) { renderAdmin(); renderAdminBonus(); }
   }
   if (S.userProfile) renderProfile();
   updateFab();
@@ -2664,9 +2666,155 @@ function renderLeaderboard() {
   });
 }
 
+function renderPoolDraft(c) {
+  const pool = S.activePool;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  let html = '';
+
+  // Header: Status
+  if (pool.status === 'finished') {
+    html += `<div style="background:var(--bg2);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
+      <div style="font-size:14px;color:var(--text2)">Pool abgeschlossen</div>
+    </div>`;
+    c.innerHTML = html;
+    return;
+  }
+
+  const totalPicks = S.poolPicks.length;
+  const totalMembers = S.poolMembers.length;
+  const maxRounds = 5;
+  const allPicksDone = totalPicks >= totalMembers * maxRounds;
+
+  if (allPicksDone) {
+    html += `<div style="background:var(--green);color:#fff;padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
+      <div style="font-size:18px;font-weight:600">Draft komplett!</div>
+      <div style="font-size:12px;opacity:0.85;margin-top:4px">Alle Spieler sind gedraftet</div>
+      ${isAdmin && pool.status === 'draft' ? `<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>` : ''}
+    </div>`;
+  } else {
+    const current = getCurrentDrafter();
+    if (current && current.member) {
+      const myTurn = isMyTurn();
+      const memberName = current.member.users?.name || 'Unknown';
+      if (myTurn) {
+        html += `<div style="background:var(--green);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px;animation:pulse 2s infinite">
+          <div style="font-size:11px;letter-spacing:1px;opacity:0.85">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
+          <div style="font-size:22px;font-weight:600;margin:8px 0">Du bist dran!</div>
+          <button class="btn" onclick="openPoolDraftModal()" style="background:#fff;color:var(--green);font-weight:600;padding:10px 20px">Spieler picken</button>
+        </div>`;
+      } else {
+        html += `<div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
+          <div style="font-size:11px;letter-spacing:1px;color:var(--text3)">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
+          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(memberName)}</strong>...</div>
+        </div>`;
+      }
+    }
+  }
+
+  // Mitspieler-Reihenfolge
+  html += '<div class="section-title">Mitspieler &amp; Draft Reihenfolge</div>';
+  const ordered = [...S.poolMembers].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
+  html += ordered.map(m => {
+    const memberPicks = S.poolPicks.filter(p => p.user_id === m.user_id).length;
+    const isCurrent = getCurrentDrafter()?.member?.user_id === m.user_id;
+    return `<div class="order-item" ${isCurrent ? 'style="border:2px solid var(--green)"' : ''}>
+      <div class="order-num">${m.draft_position || '?'}</div>
+      <div class="order-name">${esc(m.users?.name || 'Unknown')}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+      <div style="font-size:11px;color:var(--text3)">${memberPicks}/${maxRounds}</div>
+    </div>`;
+  }).join('');
+
+  // Field-Status
+  if (S.fieldLoaded) {
+    const total = S.pgaTestField.length;
+    html += `<div style="font-size:12px;color:var(--text2);margin:12px 0 4px;padding-left:4px">Feld: ${total} Spieler &middot; ${totalPicks} gedraftet</div>`;
+  }
+
+  // Picks pro Runde
+  html += '<div class="section-title" style="margin-top:16px">Draft Picks</div>';
+  for (let r = 1; r <= maxRounds; r++) {
+    const roundPicks = S.poolPicks
+      .filter(p => p.draft_round === r)
+      .sort((a, b) => a.draft_pick - b.draft_pick);
+    html += `<div class="draft-round-label">Runde ${r} ${r % 2 === 0 ? '(Reverse)' : ''}</div>`;
+    if (roundPicks.length === 0) {
+      html += `<div class="draft-pick"><div class="draft-empty">Noch keine Picks</div></div>`;
+    } else {
+      html += roundPicks.map(p => {
+        const member = S.poolMembers.find(m => m.user_id === p.user_id);
+        return `<div class="draft-pick">
+          <div class="draft-num">${p.draft_pick}</div>
+          <div class="draft-golfer">${esc(p.golfer_name)}</div>
+          <div class="draft-team">${member ? esc(member.users?.name || '?') : '?'}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  c.innerHTML = html;
+}
+
+async function activatePool() {
+  if (!S.activePool) return;
+  const { error } = await sb.from('pools').update({ status: 'active' }).eq('id', S.activePool.id);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  S.activePool.status = 'active';
+  showToast('Pool gestartet!');
+  render();
+}
+
+function openPoolDraftModal() {
+  if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+  S.draftModalOpen = true;
+  document.getElementById('inputGolferName').value = '';
+  document.getElementById('inputGolferSearch').value = '';
+  // Hide team/round selectors for pool draft (auto-determined)
+  const teamSel = document.getElementById('selectDraftTeam');
+  const roundSel = document.getElementById('selectDraftRound');
+  if (teamSel) teamSel.parentElement.style.display = 'none';
+  if (roundSel) roundSel.parentElement.style.display = 'none';
+  // Replace addDraftPick callback with addPoolPick
+  const addBtn = document.querySelector('#modalDraftPick .btn-primary');
+  if (addBtn) addBtn.setAttribute('onclick', 'addPoolPick()');
+  filterFieldList();
+  openModal('modalDraftPick');
+}
+
+async function addPoolPick() {
+  if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+  const name = document.getElementById('inputGolferName').value.trim().replace(/\s*\(a\)\s*$/, '');
+  if (!name) { showToast('Bitte Spieler ausw&auml;hlen'); return; }
+  const current = getCurrentDrafter();
+  if (!current) { showToast('Kein Drafter ermittelt'); return; }
+
+  const { error } = await sb.from('pool_picks').insert({
+    pool_id: S.activePool.id,
+    user_id: S.userId,
+    golfer_name: name,
+    draft_round: current.round,
+    draft_pick: current.pickInRound
+  });
+
+  if (error) { showToast('Fehler: ' + error.message); return; }
+
+  // Reload picks and re-render
+  const { data } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
+  S.poolPicks = data || [];
+  closeModal('modalDraftPick');
+  showToast(name + ' gedraftet!');
+  render();
+}
+
 function renderDraft() {
   if (S.draftModalOpen) return;
   const c = document.getElementById('adminDraftContent');
+  if (!c) return;
+
+  // Pool-Mode: render new pool draft UI
+  if (S.activePool) {
+    return renderPoolDraft(c);
+  }
+
   let html = '';
 
   // Admin buttons — always show when admin
@@ -2736,6 +2884,14 @@ function switchTab(tab) {
 
 function updateFab() {
   const fab = document.getElementById('fab');
+  if (!fab) return;
+  // Pool draft: FAB für eigenen Pick wenn dran
+  if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'admin' && S._adminTab === 'draft' && isMyTurn()) {
+    fab.classList.remove('hidden');
+    fab.onclick = () => openPoolDraftModal();
+    return;
+  }
+  // Legacy admin draft (pga_test)
   if (!S.isAdmin) { fab.classList.add('hidden'); return; }
   if (S.activeTab === 'admin' && S._adminTab === 'draft') {
     fab.classList.remove('hidden');
