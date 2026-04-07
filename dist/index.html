@@ -1135,11 +1135,13 @@ function renderProfile() {
     </div>`;
 
   if (S.activePool) {
+    const isPoolAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
     html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0">
       <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px">AKTIVER POOL</div>
       <div style="font-weight:600">${esc(S.activePool.name)}</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">${S.poolMembers.length} Teilnehmer &middot; ${S.activePool.entry_fee}&euro; Einsatz</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${S.poolMembers.length} Teilnehmer &middot; ${S.activePool.entry_fee}&euro; Einsatz &middot; Status: ${S.activePool.status}</div>
       <button class="btn btn-primary btn-block" onclick="showInviteLink(S.activePool)" style="margin-top:10px;padding:10px;font-size:13px">Einladungslink teilen</button>
+      ${isPoolAdmin && S.activePool.status === 'active' ? `<button class="btn btn-secondary btn-block" onclick="if(confirm('Pool wirklich abschlie&szlig;en?'))finishPool()" style="margin-top:6px;padding:10px;font-size:13px">Pool jetzt abschlie&szlig;en</button>` : ''}
     </div>`;
   } else {
     html += `<div style="text-align:center;padding:20px 0">
@@ -1328,6 +1330,36 @@ function buildPoolSnapshot() {
     payouts,
     finished_at: new Date().toISOString()
   };
+}
+
+async function finishPool() {
+  if (!S.activePool) return;
+  const snapshot = buildPoolSnapshot();
+  if (!snapshot) { showToast('Snapshot konnte nicht erstellt werden'); return; }
+
+  // Pool Status auf finished
+  const { error: poolErr } = await sb.from('pools').update({ status: 'finished' }).eq('id', S.activePool.id);
+  if (poolErr) { showToast('Fehler: ' + poolErr.message); return; }
+
+  // Snapshot upserten
+  const { error: snapErr } = await sb.from('pool_results').upsert({
+    pool_id: S.activePool.id,
+    snapshot
+  }, { onConflict: 'pool_id' });
+  if (snapErr) { showToast('Snapshot-Fehler: ' + snapErr.message); return; }
+
+  // Mail-Versand triggern (Edge Function — kommt in Task 3)
+  try {
+    await sb.functions.invoke('send-pool-results', {
+      body: { pool_id: S.activePool.id }
+    });
+  } catch (e) {
+    console.warn('Mail-Versand fehlgeschlagen:', e);
+  }
+
+  showToast('Pool abgeschlossen!');
+  S.activePool = null;
+  await initApp();
 }
 
 /* ===================== Snake Draft ===================== */
@@ -3411,6 +3443,17 @@ async function fetchLiveScores() {
     // Freeze final scores to Supabase when tournament ends
     if (S.tournamentFinished && !localStorage.getItem('pga_test_frozen')) {
       freezeFinalScores();
+    }
+    // Auto-finish pool 5 min after tournament ends
+    if (S.tournamentFinished && S.activePool && S.activePool.status === 'active') {
+      const pendingKey = 'pool_finish_pending_' + S.activePool.id;
+      const pendingSince = localStorage.getItem(pendingKey);
+      if (!pendingSince) {
+        localStorage.setItem(pendingKey, Date.now().toString());
+      } else if (Date.now() - parseInt(pendingSince) > 5 * 60 * 1000) {
+        localStorage.removeItem(pendingKey);
+        finishPool();
+      }
     }
     render();
   } catch (err) {
