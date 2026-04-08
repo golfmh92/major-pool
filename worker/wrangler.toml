@@ -2,20 +2,12 @@ name = "pga-pool-push"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# Cron paused during Masters week to save KV reads (shared ESPN PGA URL).
-# [triggers]
-# crons = ["*/2 * * * *"]
-
-[[kv_namespaces]]
-binding = "KV"
-id = "c3933db211ee4067a8cd5a39fd935db3"
+[triggers]
+crons = ["*/2 * * * *"]
 
 [vars]
 SUPABASE_URL = "https://wmqmufxyovfhxorzvrzn.supabase.co"
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard"
 
 # Secrets (set via wrangler secret put):
-# SUPABASE_KEY - anon key
-# VAPID_PRIVATE_KEY - RyQwr-0LZWTRdpaOI2mbHSGi02OfSJjRDqVmN-tS_0o
-# VAPID_PUBLIC_KEY - BI69ibPpigizZExp4HprtpKc2KN5Hm3EufVvZovroOcFyebHXLnT7anSwj74HZUiw8C87PhrJpe9l-mbY28eJA4
-# VAPID_SUBJECT - mailto:habeler.markus@gmail.com
+# SUPABASE_SERVICE_KEY - Service-Role-Key (RLS bypass für tournament_golfers upsert)

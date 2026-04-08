@@ -1,299 +1,128 @@
-// PGA Pool Push Notification Worker
-// Cron: every 2 minutes — polls ESPN, detects eagles/double bogeys, sends push notifications
+// PGA Pool Worker — Phase 2
+// Cron every 2min: fetch ESPN PGA scoreboard, upsert tournaments + tournament_golfers
+// Auto-detects cut, updates positions/scores live.
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(checkForEvents(env));
+    ctx.waitUntil(sync(env));
   },
-  // Manual trigger for testing
   async fetch(request, env) {
-    await checkForEvents(env);
-    return new Response('OK - checked for events');
+    const result = await sync(env);
+    return new Response(JSON.stringify(result, null, 2), {
+      headers: { 'content-type': 'application/json' }
+    });
   }
 };
 
-async function checkForEvents(env) {
+async function sync(env) {
   try {
-    // 1. Fetch ESPN scoreboard
     const resp = await fetch(env.ESPN_URL);
-    if (!resp.ok) return;
+    if (!resp.ok) return { error: 'espn fetch failed', status: resp.status };
     const json = await resp.json();
 
-    const events = json.events || [];
-    let tournament = events[0];
-    if (!tournament) return;
+    const ev = (json.events || [])[0];
+    if (!ev) return { error: 'no event' };
 
-    const comp = tournament.competitions?.[0];
-    if (!comp) return;
+    const comp = (ev.competitions || [])[0];
+    if (!comp) return { error: 'no competition' };
+
+    // 1. Upsert tournament
+    const state = ev.status?.type?.state; // pre | in | post
+    const statusMap = { pre: 'upcoming', in: 'in_progress', post: 'finished' };
+    const tournamentPayload = {
+      name: ev.name,
+      espn_event_id: ev.id,
+      par: comp.course?.totalPar || 72,
+      status: statusMap[state] || 'upcoming',
+      start_date: ev.date ? ev.date.slice(0, 10) : null
+    };
+
+    const tUrl = `${env.SUPABASE_URL}/rest/v1/tournaments?on_conflict=espn_event_id`;
+    const tResp = await fetch(tUrl, {
+      method: 'POST',
+      headers: sbHeaders(env, { Prefer: 'resolution=merge-duplicates,return=representation' }),
+      body: JSON.stringify(tournamentPayload)
+    });
+    if (!tResp.ok) return { error: 'tournament upsert failed', status: tResp.status, body: await tResp.text() };
+    const [tournament] = await tResp.json();
+
+    // 2. Upsert all competitors as tournament_golfers
     const competitors = comp.competitors || [];
-
-    // 2. Fetch golfer→participant mapping from Supabase
-    const golfers = await supabaseGet(env, 'pga_test_golfers', 'id,name,participant_id');
-    const participants = await supabaseGet(env, 'pga_test_participants', 'id,name');
-    const subscriptions = await supabaseGet(env, 'pga_test_push_subscriptions', 'participant_id,endpoint,p256dh,auth,favorites');
-
-    if (!golfers.length || !subscriptions.length) return;
-
-    // Build golfer→participant mapping (normalize names for matching)
-    const golferMap = {}; // espnName → [{participant_id, participantName}]
-    for (const g of golfers) {
-      const norm = normalizeName(g.name);
-      if (!golferMap[norm]) golferMap[norm] = [];
-      const p = participants.find(p => p.id === g.participant_id);
-      golferMap[norm].push({ participant_id: g.participant_id, participantName: p?.name || '' });
-    }
-
-    // 3. Scan for events
-    const newEvents = [];
-    for (const c of competitors) {
+    const golferRows = competitors.map(c => {
       const athlete = c.athlete || {};
       const name = athlete.displayName || athlete.shortName || '';
-      if (!name) continue;
+      if (!name) return null;
 
-      const linescores = c.linescores || [];
-      for (let r = 0; r < linescores.length && r < 4; r++) {
-        const roundHoles = linescores[r].linescores || [];
-        for (const h of roundHoles) {
-          const parVal = h.scoreType?.displayValue;
-          if (!parVal) continue;
-          const pv = parVal === 'E' ? 0 : parseInt(parVal);
-          if (isNaN(pv)) continue;
+      // total_score: toPar int
+      const scoreStr = c.score || '';
+      const total = parseToPar(scoreStr);
 
-          // Only eagles+ or double bogeys+
-          if (pv > -2 && pv < 2) continue;
+      // position
+      const position = c.status?.position?.displayName || null;
 
-          const eventId = `${name}_r${r + 1}_h${h.period}`;
-          const seen = await env.KV.get(eventId);
-          if (seen) continue;
+      // thru
+      const thru = c.status?.thru?.toString() || null;
 
-          // Mark as seen
-          await env.KV.put(eventId, '1', { expirationTtl: 86400 * 7 }); // expire after 7 days
+      // status: active | cut | wd | dq
+      const typeName = (c.status?.type?.name || '').toUpperCase();
+      let gStatus = 'active';
+      if (typeName.includes('CUT')) gStatus = 'cut';
+      else if (typeName.includes('WITHDRAW')) gStatus = 'wd';
+      else if (typeName.includes('DISQUAL')) gStatus = 'dq';
 
-          let emoji, label;
-          if (pv <= -3) { emoji = '🌟'; label = 'Albatross'; }
-          else if (h.value === 1) { emoji = '🔥'; label = 'Hole-in-One'; }
-          else if (pv <= -2) { emoji = '🦅'; label = 'Eagle'; }
-          else if (pv >= 3) { emoji = '🟥'; label = 'Triple Bogey+'; }
-          else { emoji = '🟡'; label = 'Doppel-Bogey'; }
-
-          newEvents.push({ name, eventId, emoji, label, hole: h.period, round: r + 1, pv });
-        }
-      }
-    }
-
-    if (newEvents.length === 0) return;
-
-    // 4. Send push notifications
-    for (const ev of newEvents) {
-      const norm = normalizeName(ev.name);
-
-      // Find subscriptions: team owners of this golfer + anyone who favorited this player
-      const teamOwners = golferMap[norm] || [];
-      const targetParticipantIds = new Set(teamOwners.map(t => t.participant_id));
-
-      // Also check favorites
-      for (const sub of subscriptions) {
-        const favs = sub.favorites || [];
-        if (favs.some(f => normalizeName(f) === norm)) {
-          targetParticipantIds.add(sub.participant_id);
-        }
+      // linescores → round1..4
+      const ls = c.linescores || [];
+      const rounds = [null, null, null, null];
+      for (let i = 0; i < ls.length && i < 4; i++) {
+        const v = ls[i].value;
+        if (typeof v === 'number' && v > 0) rounds[i] = v;
       }
 
-      const targetSubs = subscriptions.filter(s => targetParticipantIds.has(s.participant_id));
+      return {
+        tournament_id: tournament.id,
+        name,
+        espn_id: c.id || null,
+        position,
+        total_score: total,
+        thru,
+        round1: rounds[0], round2: rounds[1], round3: rounds[2], round4: rounds[3],
+        status: gStatus,
+        updated_at: new Date().toISOString()
+      };
+    }).filter(Boolean);
 
-      const shortName = ev.name.split(' ').length > 1
-        ? ev.name.split(' ').slice(1).join(' ') + ' ' + ev.name.split(' ')[0][0] + '.'
-        : ev.name;
+    // Batch upsert
+    const gUrl = `${env.SUPABASE_URL}/rest/v1/tournament_golfers?on_conflict=tournament_id,name`;
+    const gResp = await fetch(gUrl, {
+      method: 'POST',
+      headers: sbHeaders(env, { Prefer: 'resolution=merge-duplicates' }),
+      body: JSON.stringify(golferRows)
+    });
+    if (!gResp.ok) return { error: 'golfers upsert failed', status: gResp.status, body: (await gResp.text()).slice(0, 500) };
 
-      const title = `${ev.emoji} ${shortName}`;
-      const body = `${ev.label} auf Loch ${ev.hole} (R${ev.round})`;
-
-      for (const sub of targetSubs) {
-        try {
-          await sendWebPush(env, sub, { title, body });
-        } catch (e) {
-          console.error('Push failed for', sub.endpoint, e);
-          // If endpoint is gone (410), delete subscription
-          if (e.status === 410 || e.status === 404) {
-            await supabaseDelete(env, 'pga_test_push_subscriptions', sub.endpoint);
-          }
-        }
-      }
-    }
+    return {
+      ok: true,
+      tournament: tournament.name,
+      state,
+      golfers_upserted: golferRows.length
+    };
   } catch (e) {
-    console.error('checkForEvents error:', e);
+    return { error: e.message, stack: e.stack };
   }
 }
 
-// ===== Web Push (RFC 8291) =====
-async function sendWebPush(env, sub, payload) {
-  const endpoint = sub.endpoint;
-  const p256dh = sub.p256dh;
-  const auth = sub.auth;
-
-  // Import VAPID private key
-  const vapidPrivate = env.VAPID_PRIVATE_KEY;
-  const vapidPublic = env.VAPID_PUBLIC_KEY;
-  const vapidSubject = env.VAPID_SUBJECT;
-
-  // Use the web push protocol
-  // For Cloudflare Workers, we need to implement ECDH + HKDF + AES-GCM encryption
-  // This is complex — using a simplified approach with the Web Crypto API
-
-  const payloadText = JSON.stringify(payload);
-  const payloadBytes = new TextEncoder().encode(payloadText);
-
-  // Generate local ECDH key pair
-  const localKeyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-  const localPublicKey = await crypto.subtle.exportKey('raw', localKeyPair.publicKey);
-
-  // Import subscriber's public key
-  const subscriberPublicKeyBytes = base64UrlDecode(p256dh);
-  const subscriberPublicKey = await crypto.subtle.importKey('raw', subscriberPublicKeyBytes, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-
-  // ECDH shared secret
-  const sharedSecret = await crypto.subtle.deriveBits({ name: 'ECDH', public: subscriberPublicKey }, localKeyPair.privateKey, 256);
-
-  // Auth secret
-  const authBytes = base64UrlDecode(auth);
-
-  // HKDF for IKM
-  const ikm = await hkdf(authBytes, sharedSecret, concatBuffers(new TextEncoder().encode('WebPush: info\0'), subscriberPublicKeyBytes, new Uint8Array(localPublicKey)), 32);
-
-  // Salt
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-
-  // HKDF for CEK and nonce
-  const prk = await hkdf(salt, ikm, new TextEncoder().encode('Content-Encoding: aes128gcm\0'), 16);
-  const nonce = await hkdf(salt, ikm, new TextEncoder().encode('Content-Encoding: nonce\0'), 12);
-
-  // Encrypt with AES-128-GCM
-  const aesKey = await crypto.subtle.importKey('raw', prk, { name: 'AES-GCM' }, false, ['encrypt']);
-  // Add padding
-  const paddedPayload = concatBuffers(new Uint8Array([0, 0]), payloadBytes);
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aesKey, paddedPayload);
-
-  // Build body: salt(16) + rs(4) + idlen(1) + keyid(65) + encrypted
-  const rs = new Uint8Array(4);
-  new DataView(rs.buffer).setUint32(0, 4096);
-  const keyId = new Uint8Array(localPublicKey);
-  const idLen = new Uint8Array([65]);
-  const body = concatBuffers(salt, rs, idLen, keyId, new Uint8Array(encrypted));
-
-  // VAPID JWT
-  const jwt = await createVapidJwt(endpoint, vapidSubject, vapidPrivate, vapidPublic);
-
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Content-Encoding': 'aes128gcm',
-      'TTL': '86400',
-      'Authorization': `vapid t=${jwt.token}, k=${jwt.publicKey}`
-    },
-    body
-  });
-
-  if (!response.ok) {
-    const err = new Error(`Push failed: ${response.status}`);
-    err.status = response.status;
-    throw err;
-  }
+function parseToPar(s) {
+  if (s === undefined || s === null || s === '') return null;
+  if (s === 'E') return 0;
+  const n = parseInt(s, 10);
+  return isNaN(n) ? null : n;
 }
 
-async function createVapidJwt(endpoint, subject, privateKeyBase64, publicKeyBase64) {
-  const url = new URL(endpoint);
-  const audience = `${url.protocol}//${url.host}`;
-
-  const header = { typ: 'JWT', alg: 'ES256' };
-  const payload = {
-    aud: audience,
-    exp: Math.floor(Date.now() / 1000) + 86400,
-    sub: subject
+function sbHeaders(env, extra = {}) {
+  return {
+    'apikey': env.SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'Content-Type': 'application/json',
+    ...extra
   };
-
-  const headerB64 = base64UrlEncode(JSON.stringify(header));
-  const payloadB64 = base64UrlEncode(JSON.stringify(payload));
-  const unsigned = `${headerB64}.${payloadB64}`;
-
-  // Import private key
-  const privateKeyBytes = base64UrlDecode(privateKeyBase64);
-  const key = await crypto.subtle.importKey('jwk', {
-    kty: 'EC', crv: 'P-256',
-    d: privateKeyBase64,
-    x: base64UrlEncode(base64UrlDecode(publicKeyBase64).slice(1, 33)),
-    y: base64UrlEncode(base64UrlDecode(publicKeyBase64).slice(33, 65))
-  }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-
-  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(unsigned));
-
-  // Convert DER signature to raw r||s format
-  const sig = derToRaw(new Uint8Array(signature));
-  const token = `${unsigned}.${base64UrlEncode(sig)}`;
-
-  return { token, publicKey: publicKeyBase64 };
-}
-
-// ===== Helpers =====
-function normalizeName(n) {
-  return n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z\s]/g, '').trim();
-}
-
-async function supabaseGet(env, table, select) {
-  const resp = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?select=${select}`, {
-    headers: { 'apikey': env.SUPABASE_KEY, 'Authorization': `Bearer ${env.SUPABASE_KEY}` }
-  });
-  return resp.ok ? resp.json() : [];
-}
-
-async function supabaseDelete(env, table, endpoint) {
-  await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?endpoint=eq.${encodeURIComponent(endpoint)}`, {
-    method: 'DELETE',
-    headers: { 'apikey': env.SUPABASE_KEY, 'Authorization': `Bearer ${env.SUPABASE_KEY}` }
-  });
-}
-
-function base64UrlDecode(str) {
-  const padding = '='.repeat((4 - str.length % 4) % 4);
-  const base64 = (str + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const binary = atob(base64);
-  return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
-}
-
-function base64UrlEncode(data) {
-  if (typeof data === 'string') data = new TextEncoder().encode(data);
-  if (data instanceof ArrayBuffer) data = new Uint8Array(data);
-  return btoa(String.fromCharCode(...data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function concatBuffers(...buffers) {
-  const total = buffers.reduce((sum, b) => sum + b.byteLength, 0);
-  const result = new Uint8Array(total);
-  let offset = 0;
-  for (const b of buffers) {
-    result.set(new Uint8Array(b instanceof ArrayBuffer ? b : b.buffer ? b : b), offset);
-    offset += b.byteLength;
-  }
-  return result;
-}
-
-async function hkdf(salt, ikm, info, length) {
-  const key = await crypto.subtle.importKey('raw', salt, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const prk = await crypto.subtle.sign('HMAC', key, ikm instanceof ArrayBuffer ? ikm : new Uint8Array(ikm));
-  const infoKey = await crypto.subtle.importKey('raw', prk, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const result = await crypto.subtle.sign('HMAC', infoKey, concatBuffers(info, new Uint8Array([1])));
-  return new Uint8Array(result).slice(0, length);
-}
-
-function derToRaw(der) {
-  // DER encoded ECDSA signature to raw r||s (each 32 bytes)
-  if (der.length === 64) return der; // already raw
-  const r = der.slice(der[3] === 33 ? 5 : 4, der[3] === 33 ? 37 : 36);
-  const sOffset = der[3] === 33 ? 37 : 36;
-  const sLen = der[sOffset + 1];
-  const s = der.slice(sOffset + 2 + (sLen === 33 ? 1 : 0), sOffset + 2 + sLen);
-  const raw = new Uint8Array(64);
-  raw.set(r.length === 33 ? r.slice(1) : r, 32 - (r.length === 33 ? 32 : r.length));
-  raw.set(s.length === 33 ? s.slice(1) : s, 64 - (s.length === 33 ? 32 : s.length));
-  return raw;
 }
