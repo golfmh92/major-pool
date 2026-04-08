@@ -2119,14 +2119,31 @@ function updateLiveBadge() {
 }
 
 function startLiveRefresh() {
-  // Phase 1: kein ESPN-Scraping mehr — wird in Phase 2 vom Worker übernommen
-  // Polling für tournament_golfers Updates
+  // Tournament-Polling (Worker hat Daten alle 2min im Schnitt)
   setInterval(async () => {
     if (S.activePool && S.activePool.tournament_id) {
       await loadTournament();
       if (S.activeTab === 'leaderboard' || S.activeTab === 'rangliste') render();
     }
   }, 60000);
+
+  // Draft-Polling: schneller wenn im Draft-Tab
+  setInterval(async () => {
+    if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'draft') {
+      await pollPoolPicks();
+    }
+  }, 4000);
+}
+
+async function pollPoolPicks() {
+  if (!S.activePool) return;
+  const { data, error } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
+  if (error || !data) return;
+  // Nur re-rendern wenn sich was geändert hat
+  if (data.length !== S.poolPicks.length) {
+    S.poolPicks = data;
+    render();
+  }
 }
 
 
