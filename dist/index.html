@@ -75,10 +75,9 @@ body::before{content:'';position:fixed;inset:0;background:
 .tab.active svg{transform:scale(1.08)}
 .hidden{display:none!important}
 
-.more-item{display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;background:none;border:none;border-bottom:1px solid var(--border);font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--text);cursor:pointer;text-align:left}
-.more-item:last-child{border-bottom:none}
-.more-item:hover{background:var(--bg2)}
-.more-item[hidden]{display:none}
+.subtabs{display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:14px}
+.subtab{flex:1;padding:9px 6px;text-align:center;border:none;background:none;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--text2);border-radius:7px;cursor:pointer;transition:background .15s,color .15s}
+.subtab.active{background:var(--card);color:var(--green);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 /* ===== Cards ===== */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .card:active{transform:scale(.985)}
@@ -450,56 +449,6 @@ body::before{content:'';position:fixed;inset:0;background:
       <div id="draftContent"></div>
     </div>
 
-    <!-- ADMIN (Pool-Verwaltung) -->
-    <div class="view" id="viewAdmin">
-      <div id="adminContent"></div>
-    </div>
-
-    <!-- STATS -->
-    <div class="view" id="viewStats">
-      <div id="statsContent"></div>
-    </div>
-
-    <!-- PAYOUTS -->
-    <div class="view" id="viewPayouts">
-      <div id="payoutsContent"></div>
-    </div>
-
-    <!-- RULES -->
-    <div class="view" id="viewRules">
-      <div class="rule-section">
-        <div class="rule-heading">Allgemein</div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Entry Fee: <span class="rule-highlight">20&euro;</span></span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Snake Draft &mdash; Reihenfolge wird zuf&auml;llig ausgelost</span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Jeder w&auml;hlt <span class="rule-highlight">5 Spieler</span></span></div>
-      </div>
-      <div class="rule-section">
-        <div class="rule-heading">Scoring</div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Runde 1 &amp; 2: Die besten <span class="rule-highlight">4 von 5</span> Scores z&auml;hlen</span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Runde 3 &amp; 4: Die besten <span class="rule-highlight">3 von 5</span> Scores z&auml;hlen</span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Falls mehr als 2 Spieler den Cut nicht schaffen &rarr; <span class="rule-highlight" style="color:var(--red)">Team eliminiert</span></span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Niedrigster Team Score am Sonntag gewinnt</span></div>
-      </div>
-      <div class="rule-section">
-        <div class="rule-heading">Bonus Headstart</div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Par 3 Contest Gewinner im Team &rarr; <span class="rule-highlight">-2 Schl&auml;ge</span></span></div>
-        <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>HIO beim Par 3 Contest &rarr; <span class="rule-highlight">-1 Schlag pro HIO</span></span></div>
-      </div>
-      <div class="rule-section">
-        <div class="rule-heading">Payouts</div>
-        <div class="payout-bar">
-          <div class="payout-seg payout-1">1. ~60%</div>
-          <div class="payout-seg payout-2">2. ~30%</div>
-          <div class="payout-seg payout-3">3.</div>
-        </div>
-        <div style="margin-top:8px;font-size:12px;color:var(--text3)">Pot = Mitspieler &times; 20&euro;</div>
-      </div>
-      <div style="text-align:center;padding:20px 0 10px">
-        <span style="display:inline-block;font-size:13px;color:var(--green);cursor:pointer;font-weight:500;padding:8px 16px;background:var(--green-dim);border-radius:8px" onclick="_tutorialSlide=0;showTutorial()">Einführung nochmal ansehen</span>
-      </div>
-      <div style="text-align:center;padding:10px 0 10px"><span style="font-size:11px;color:var(--text3);cursor:pointer;letter-spacing:.5px" onclick="toggleAdmin()">Admin</span></div>
-    </div>
-
     <!-- PROFIL -->
     <div class="view" id="viewProfile">
       <div id="profileContent"></div>
@@ -525,31 +474,7 @@ body::before{content:'';position:fixed;inset:0;background:
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span>Profil</span>
     </button>
-    <button class="tab" data-tab="more" onclick="toggleMoreMenu()" id="tabMore">
-      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
-      <span>Mehr</span>
-    </button>
   </nav>
-
-  <!-- More Menu Sheet -->
-  <div id="moreMenu" style="display:none;position:absolute;bottom:calc(var(--tab-h) + var(--safe-bottom) + 8px);right:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.18);z-index:200;overflow:hidden;min-width:180px">
-    <button class="more-item" onclick="switchTab('payouts');toggleMoreMenu()" data-more="payouts">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-      <span>Payouts</span>
-    </button>
-    <button class="more-item" onclick="switchTab('stats');toggleMoreMenu()" data-more="stats">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-      <span>Stats</span>
-    </button>
-    <button class="more-item" onclick="switchTab('admin');toggleMoreMenu()" data-more="admin">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Admin</span>
-    </button>
-    <button class="more-item" onclick="switchTab('rules');toggleMoreMenu()" data-more="rules">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-      <span>Regeln</span>
-    </button>
-  </div>
 </div>
 
 <!-- PWA Install Prompt -->
@@ -1124,21 +1049,14 @@ async function loadPoolData() {
 
 function updateTabs() {
   const hasPool = !!S.activePool;
-  const poolStatus = S.activePool?.status;
-  const inDraft = hasPool && poolStatus === 'draft';
-  const inActive = hasPool && poolStatus === 'active';
-  const isPoolAdmin = hasPool && S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  const inDraft = hasPool && S.activePool?.status === 'draft';
   const isGuest = S.isGuest;
 
   const tabConfig = {
     rangliste: hasPool,
     leaderboard: hasPool,
     draft: inDraft,
-    payouts: hasPool,
-    stats: hasPool,
-    admin: hasPool && isPoolAdmin,
-    profile: !isGuest,
-    rules: hasPool
+    profile: !isGuest
   };
 
   document.querySelectorAll('.tab').forEach(el => {
@@ -1147,37 +1065,61 @@ function updateTabs() {
       el.classList.toggle('hidden', !tabConfig[tab]);
     }
   });
-  // More-Menü Items
-  document.querySelectorAll('.more-item').forEach(el => {
-    const tab = el.dataset.more;
-    if (tab && tabConfig[tab] !== undefined) {
-      el.hidden = !tabConfig[tab];
-    }
-  });
-  // "Mehr"-Tab nur anzeigen wenn mind. ein Item drin sichtbar
-  const anyMore = ['payouts','stats','admin','rules'].some(t => tabConfig[t]);
-  document.getElementById('tabMore')?.classList.toggle('hidden', !anyMore);
 }
 
-function toggleMoreMenu() {
-  const m = document.getElementById('moreMenu');
-  if (!m) return;
-  const open = m.style.display === 'block';
-  m.style.display = open ? 'none' : 'block';
-  if (!open) {
-    setTimeout(() => document.addEventListener('click', closeMoreOnOutside, { once: true }), 10);
-  }
+// Sub-Tab-Konfiguration pro Haupt-Tab
+const SUBTABS = {
+  rangliste: [
+    { id: 'rangliste', label: 'Rangliste' },
+    { id: 'payouts',   label: 'Payouts' }
+  ],
+  leaderboard: [
+    { id: 'leaderboard', label: 'Leaderboard' },
+    { id: 'stats',       label: 'Stats' }
+  ],
+  profile: [
+    { id: 'profile', label: 'Profil' },
+    { id: 'admin',   label: 'Admin', adminOnly: true },
+    { id: 'rules',   label: 'Regeln' }
+  ]
+};
+
+function buildSubtabs(mainTab, activeSub) {
+  const groups = SUBTABS[mainTab];
+  if (!groups) return '';
+  const isAdmin = S.activePool && S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  const visible = groups.filter(g => !g.adminOnly || isAdmin);
+  if (visible.length <= 1) return '';
+  return `<div class="subtabs">${visible.map(g =>
+    `<button class="subtab${g.id === activeSub ? ' active' : ''}" onclick="setSubTab('${mainTab}','${g.id}')">${g.label}</button>`
+  ).join('')}</div>`;
 }
-function closeMoreOnOutside(e) {
-  if (e.target.closest('#moreMenu') || e.target.closest('#tabMore')) {
-    setTimeout(() => document.addEventListener('click', closeMoreOnOutside, { once: true }), 10);
-    return;
+
+function setSubTab(mainTab, subId) {
+  S.subTab = S.subTab || {};
+  S.subTab[mainTab] = subId;
+  render();
+}
+
+// Liefert den Container für den aktuellen Sub-Render und prependet die Sub-Tab-Bar
+function getSubContainer(subId) {
+  const main = SUB_TO_MAIN[subId] || subId;
+  const view = document.getElementById('view' + main.charAt(0).toUpperCase() + main.slice(1));
+  if (!view) return null;
+  // Inhalts-Slot bereitstellen
+  let slot = view.querySelector('.sub-slot');
+  if (!slot) {
+    view.innerHTML = '<div class="sub-tabs-mount"></div><div class="sub-slot"></div>';
+    slot = view.querySelector('.sub-slot');
   }
-  document.getElementById('moreMenu').style.display = 'none';
+  // Sub-Tab-Bar rendern
+  const mount = view.querySelector('.sub-tabs-mount');
+  if (mount) mount.innerHTML = buildSubtabs(main, subId);
+  return slot;
 }
 
 function renderProfile() {
-  const c = document.getElementById('profileContent');
+  const c = getSubContainer('profile');
   if (!c) return;
   const p = S.userProfile || { name: currentUser?.email || 'Unbekannt', email: currentUser?.email || '', avatar_initials: '?' };
 
@@ -1657,7 +1599,7 @@ function memberInitials(m) {
 
 /* ===================== Render: Rangliste (Pool-Ranking) ===================== */
 function renderRangliste() {
-  const c = document.getElementById('ranglisteContent');
+  const c = getSubContainer('rangliste');
   if (!c) return;
   if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
 
@@ -1701,7 +1643,7 @@ function renderRangliste() {
 
 /* ===================== Render: Leaderboard (Turnier Live) ===================== */
 function renderLeaderboardTab() {
-  const c = document.getElementById('leaderboardContent');
+  const c = getSubContainer('leaderboard');
   if (!c) return;
   if (!S.activePool) {
     c.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:14px;color:var(--text2)">Erstelle oder tritt einem Pool bei, um das Turnier-Leaderboard zu sehen.</div></div>';
@@ -1750,7 +1692,7 @@ function renderLeaderboardTab() {
 
 /* ===================== Render: Draft ===================== */
 function renderDraftTab() {
-  const c = document.getElementById('draftContent');
+  const c = getSubContainer('draft');
   if (!c) return;
   if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   renderPoolDraft(c);
@@ -1758,7 +1700,7 @@ function renderDraftTab() {
 
 /* ===================== Render: Stats (Phase 1 stub) ===================== */
 function renderStatsTab() {
-  const c = document.getElementById('statsContent');
+  const c = getSubContainer('stats');
   if (!c) return;
   if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
@@ -1770,7 +1712,7 @@ function renderStatsTab() {
 
 /* ===================== Render: Payouts ===================== */
 function renderPayoutsTab() {
-  const c = document.getElementById('payoutsContent');
+  const c = getSubContainer('payouts');
   if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   const pool = S.activePool;
   const numMembers = S.poolMembers.length;
@@ -1791,9 +1733,37 @@ function renderPayoutsTab() {
     </div>`;
 }
 
+/* ===================== Render: Regeln ===================== */
+function renderRulesTab() {
+  const c = getSubContainer('rules');
+  if (!c) return;
+  c.innerHTML = `
+    <div class="rule-section">
+      <div class="rule-heading">Allgemein</div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Entry Fee: <span class="rule-highlight">${S.activePool ? Math.round(S.activePool.entry_fee) : 20}&euro;</span></span></div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Snake Draft &mdash; Reihenfolge wird zuf&auml;llig ausgelost</span></div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Jeder w&auml;hlt <span class="rule-highlight">5 Spieler</span></span></div>
+    </div>
+    <div class="rule-section">
+      <div class="rule-heading">Scoring</div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Runde 1 &amp; 2: Die besten <span class="rule-highlight">4 von 5</span> Scores z&auml;hlen</span></div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Runde 3 &amp; 4: Die besten <span class="rule-highlight">3 von 5</span> Scores z&auml;hlen</span></div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Falls mehr als 2 Spieler den Cut nicht schaffen &rarr; <span class="rule-highlight" style="color:var(--red)">Team eliminiert</span></span></div>
+      <div class="rule-item"><span class="rule-bullet">&#9670;</span><span>Niedrigster Team Score am Sonntag gewinnt</span></div>
+    </div>
+    <div class="rule-section">
+      <div class="rule-heading">Payouts</div>
+      <div class="payout-bar">
+        <div class="payout-seg payout-1">1. ~60%</div>
+        <div class="payout-seg payout-2">2. ~30%</div>
+        <div class="payout-seg payout-3">3.</div>
+      </div>
+    </div>`;
+}
+
 /* ===================== Render: Admin (Pool-Verwaltung) ===================== */
 function renderAdminTab() {
-  const c = document.getElementById('adminContent');
+  const c = getSubContainer('admin');
   if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   const pool = S.activePool;
   const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
@@ -2057,25 +2027,44 @@ async function pickGolfer(name) {
 }
 
 /* ===================== Tab Switching ===================== */
-function switchTab(tab) {
-  S.activeTab = tab;
+// Mapping Sub-Tab → Haupt-Tab (für View-Container)
+const SUB_TO_MAIN = {
+  rangliste: 'rangliste', payouts: 'rangliste',
+  leaderboard: 'leaderboard', stats: 'leaderboard',
+  profile: 'profile', admin: 'profile', rules: 'profile',
+  draft: 'draft'
+};
+
+function switchTab(mainTab) {
+  S.activeTab = mainTab;
+  S.subTab = S.subTab || {};
+  // Default-Sub für jeden Haupt-Tab
+  if (!S.subTab[mainTab]) S.subTab[mainTab] = mainTab;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  const viewEl = document.getElementById('view' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  const viewEl = document.getElementById('view' + mainTab.charAt(0).toUpperCase() + mainTab.slice(1));
   if (viewEl) viewEl.classList.add('active');
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === mainTab));
   render();
   updateFab();
 }
 
 function render() {
-  const t = S.activeTab;
-  if (t === 'profile') renderProfile();
-  else if (t === 'rangliste') renderRangliste();
-  else if (t === 'leaderboard') renderLeaderboardTab();
-  else if (t === 'draft') renderDraftTab();
-  else if (t === 'admin') renderAdminTab();
-  else if (t === 'stats') renderStatsTab();
-  else if (t === 'payouts') renderPayoutsTab();
+  const main = S.activeTab;
+  const sub = (S.subTab && S.subTab[main]) || main;
+  // Sub-Tab-Bar wird in den jeweiligen Render-Funktionen oben eingebaut
+  if (main === 'profile') {
+    if (sub === 'admin') renderAdminTab();
+    else if (sub === 'rules') renderRulesTab();
+    else renderProfile();
+  } else if (main === 'rangliste') {
+    if (sub === 'payouts') renderPayoutsTab();
+    else renderRangliste();
+  } else if (main === 'leaderboard') {
+    if (sub === 'stats') renderStatsTab();
+    else renderLeaderboardTab();
+  } else if (main === 'draft') {
+    renderDraftTab();
+  }
 }
 
 function updateFab() {
