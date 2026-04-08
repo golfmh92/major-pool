@@ -780,12 +780,11 @@ body::before{content:'';position:fixed;inset:0;background:
     <h2>Draft Pick</h2>
     <div id="draftPickContext" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
     <div class="form-group">
-      <label>Golfer-Name</label>
-      <input class="input" type="text" id="inputGolferName" placeholder="z.B. Scottie Scheffler" autocomplete="off">
+      <input class="input" type="text" id="inputGolferName" placeholder="Spieler suchen..." autocomplete="off" oninput="filterGolferList()">
+      <div id="golferList" style="max-height:280px;overflow-y:auto;margin-top:8px;border-radius:var(--radius-sm);border:1px solid var(--border)"></div>
     </div>
     <div class="actions">
       <button class="btn btn-secondary" onclick="closeModal('modalDraftPick')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="addPoolPick()">Picken</button>
     </div>
   </div>
 </div>
@@ -1958,24 +1957,50 @@ function openPoolDraftModal() {
   if (ctx && current) {
     ctx.textContent = `Runde ${current.round} · Pick ${current.pickInRound} · für ${memberName(current.member)}`;
   }
+  filterGolferList();
   openModal('modalDraftPick');
   setTimeout(() => document.getElementById('inputGolferName').focus(), 100);
 }
 
-async function addPoolPick() {
+function filterGolferList() {
+  const list = document.getElementById('golferList');
+  if (!list) return;
+  const q = (document.getElementById('inputGolferName').value || '').trim().toLowerCase();
+  const taken = new Set(S.poolPicks.map(p => p.golfer_name.toLowerCase()));
+  let golfers = S.tournamentGolfers || [];
+  if (golfers.length === 0) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Kein Turnier verknüpft. Admin → "PGA-Turnier zuweisen"</div>';
+    return;
+  }
+  const filtered = golfers
+    .filter(g => !q || g.name.toLowerCase().includes(q))
+    .slice(0, 50);
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nichts gefunden</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(g => {
+    const isTaken = taken.has(g.name.toLowerCase());
+    return `<div onclick="${isTaken ? '' : `pickGolfer('${esc(g.name).replace(/'/g, "\\'")}')`}"
+      style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:${isTaken ? 'not-allowed' : 'pointer'};opacity:${isTaken ? '0.4' : '1'}">
+      <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}${isTaken ? ' <span style="font-size:10px;color:var(--text3)">(gewählt)</span>' : ''}</div>
+      <div style="font-size:12px;color:var(--text3);min-width:32px;text-align:right">${g.position || ''}</div>
+      <div style="font-family:var(--font-display);font-size:14px;font-weight:700;min-width:32px;text-align:right" class="${scoreClass(g.total_score)}">${fmtScore(g.total_score)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function pickGolfer(name) {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
-  const name = document.getElementById('inputGolferName').value.trim();
-  if (!name) { showToast('Bitte Spieler eingeben'); return; }
   const current = getCurrentDrafter();
   if (!current) { showToast('Kein Drafter ermittelt'); return; }
-  // Doppelpick verhindern
   if (S.poolPicks.some(p => p.golfer_name.toLowerCase() === name.toLowerCase())) {
-    showToast('Dieser Spieler wurde bereits gedraftet'); return;
+    showToast('Bereits gedraftet'); return;
   }
 
   const { error } = await sb.from('pool_picks').insert({
     pool_id: S.activePool.id,
-    user_id: current.member.user_id,  // null bei Platzhalter
+    user_id: current.member.user_id,
     member_id: current.member.id,
     golfer_name: name,
     draft_round: current.round,
