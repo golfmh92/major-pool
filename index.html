@@ -1819,7 +1819,33 @@ function renderAdminTab() {
   }
   html += `</div>`;
 
+  // Danger Zone
+  html += `<div style="background:var(--card);border:1px solid var(--red);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:600;color:var(--red);letter-spacing:0.5px;margin-bottom:8px">GEFAHRENZONE</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Löscht den Pool inkl. aller Picks und Mitglieder. Nicht umkehrbar.</div>
+    <button class="btn btn-block" onclick="deletePool()" style="background:var(--red);color:#fff;padding:10px;font-size:13px;border:none">Pool löschen</button>
+  </div>`;
+
   c.innerHTML = html;
+}
+
+async function deletePool() {
+  if (!S.activePool) return;
+  if (!confirm(`Pool "${S.activePool.name}" wirklich löschen? Alle Picks und Mitspieler gehen verloren.`)) return;
+  const { error } = await sb.from('pools').delete().eq('id', S.activePool.id);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  // Lokalen State zurücksetzen
+  S.activePool = null;
+  S.poolMembers = [];
+  S.poolPicks = [];
+  S.poolScores = [];
+  S.poolBonuses = [];
+  S.tournament = null;
+  S.tournamentGolfers = [];
+  unsubscribeDraftRealtime();
+  updateTabs();
+  switchTab('profile');
+  showToast('Pool gelöscht');
 }
 
 async function assignCurrentTournament() {
