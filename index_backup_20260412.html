@@ -328,8 +328,6 @@ body::before{content:'';position:fixed;inset:0;background:
 /* ===== Spinner ===== */
 .spinner{width:24px;height:24px;border:3px solid var(--bg2);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;margin:24px auto}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes scoreFade{0%{opacity:0;transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
-.score-changed{animation:scoreFade .5s ease}
 
 /* ===== Section title ===== */
 .section-title{font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--green);margin:16px 0 10px;letter-spacing:.5px}
@@ -758,7 +756,7 @@ body::before{content:'';position:fixed;inset:0;background:
     <div id="scorecardTitle"></div>
     <div id="scorecardContent"></div>
     <div class="actions">
-      <button class="btn btn-secondary btn-block" onclick="S._openScorecardName=null;closeModal('modalScorecard')">Schließen</button>
+      <button class="btn btn-secondary btn-block" onclick="closeModal('modalScorecard')">Schließen</button>
     </div>
   </div>
 </div>
@@ -803,13 +801,12 @@ body::before{content:'';position:fixed;inset:0;background:
 
 <script>
 /* ===================== Constants ===================== */
-const PAR = 72; // Default PAR (overridden by pool config)
+const PAR = 71; // TPC San Antonio (Oaks Course)
 const ENTRY_FEE = 20;
-const ESPN_GOLF_URL = 'https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga';
-const ESPN_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard';
-const TOURNAMENT_START = new Date('2026-04-02T00:00:00');
+const ESPN_GOLF_URL = 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard';
+const TOURNAMENT_START = new Date('2026-04-02T00:00:00'); // Valero Texas Open, Do 2. April
 const CUT_TOP = 65; // Top 65 + Ties (PGA Tour Standard), Masters: 50
-const LIVE_REFRESH_MS = 20000; // 20 seconds when live
+const LIVE_REFRESH_MS = 30000; // 30 seconds when live
 const IDLE_REFRESH_MS = 600000; // 10 minutes when not playing
 
 /* ===================== Supabase ===================== */
@@ -827,26 +824,16 @@ let S = {
   _adminTab: 'draft',
   lbRound: 0,
   myName: '',
-  // Live scoring (ESPN)
+  // Live scoring
   liveScores: {},
   liveEventName: '',
   liveLastUpdate: null,
   liveTimer: null,
-  badgeTimer: null,
   liveActive: false,
-  tournamentLive: false,
-  tournamentFinished: false,
-  eventFinished: false,
-  actualCut: null,
-  projectedCut: null,
-  _currentInterval: null,
-  _lastFingerprint: '',
-  _openScorecardName: null,
-  favorites: JSON.parse(localStorage.getItem('pga_favorites') || '[]'),
-  lbRoundFilter: 0, // 0=Gesamt, 1-4=Runden
-  // Field
-  pgaTestField: [],
+  // Masters field
+  pgaTestField: [],      // [{name, country, rank}] from ESPN
   fieldLoaded: false,
+  // Live ticker
   // Auth
   userProfile: null,
   userId: null,
@@ -1252,17 +1239,10 @@ async function showPoolResult(poolId) {
 function getPoolGolferScore(golferName, round) {
   if (!S.activePool) return null;
   const pid = S.activePool.id;
-  // 1. Manual pool_scores override
   const manual = S.poolScores.find(x => x.pool_id === pid && x.golfer_name === golferName && x.round === round && x.score > 0);
   if (manual) return manual.score;
-  // 2. ESPN Live Data
-  const live = matchGolferToLive(golferName);
-  if (live) {
-    const sc = live['r' + round];
-    if (sc) return sc;
-  }
-  // 3. Fallback: tournament_golfers table
-  const tg = (S.tournamentGolfers || []).find(g => g.name === golferName);
+  // Fallback: tournament_golfers (Phase 2 ESPN-Worker)
+  const tg = S.tournamentGolfers.find(g => g.name === golferName);
   if (tg) {
     const r = tg['round' + round];
     if (r) return r;
@@ -1273,16 +1253,11 @@ function getPoolGolferScore(golferName, round) {
 function getPoolGolferStatus(golferName) {
   if (!S.activePool) return 'active';
   const pid = S.activePool.id;
-  // Manual overrides
   const dq = S.poolScores.some(s => s.pool_id === pid && s.golfer_name === golferName && s.score === -1);
   if (dq) return 'dq';
   const wd = S.poolScores.some(s => s.pool_id === pid && s.golfer_name === golferName && s.score === -2);
   if (wd) return 'wd';
-  // ESPN Live Status
-  const live = matchGolferToLive(golferName);
-  if (live && live.outStatus) return live.outStatus;
-  // Fallback: tournament_golfers table
-  const tg = (S.tournamentGolfers || []).find(g => g.name === golferName);
+  const tg = S.tournamentGolfers.find(g => g.name === golferName);
   if (tg && tg.status && tg.status !== 'active') return tg.status;
   return 'active';
 }
@@ -1378,337 +1353,6 @@ function getPoolRanking() {
     return a.total - b.total;
   });
   return teams;
-}
-
-/* ===================== Live Scoring (ESPN) ===================== */
-function normalizeName(name) {
-  return name.replace(/\s*\(a\)\s*$/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function fuzzyMatch(text, query) {
-  if (!query) return true;
-  const t = normalizeName(text);
-  const q = normalizeName(query);
-  if (t.includes(q)) return true;
-  let ti = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    while (ti < t.length && t[ti] !== q[qi]) ti++;
-    if (ti >= t.length) return false;
-    ti++;
-  }
-  return true;
-}
-
-function matchGolferToLive(golferName) {
-  if (!golferName || !S.liveScores || Object.keys(S.liveScores).length === 0) return null;
-  const norm = normalizeName(golferName.replace(/\s*\(a\)\s*$/, ''));
-  const parts = norm.split(' ');
-  // Exact match
-  for (const [liveName, data] of Object.entries(S.liveScores)) {
-    if (normalizeName(liveName) === norm) return data;
-  }
-  // Last-name match
-  const lastName = parts[parts.length - 1];
-  const matches = [];
-  for (const [liveName, data] of Object.entries(S.liveScores)) {
-    const liveParts = normalizeName(liveName).split(' ');
-    if (liveParts[liveParts.length - 1] === lastName) matches.push({ liveName, data });
-  }
-  if (matches.length === 1) return matches[0].data;
-  // First initial + last name
-  if (parts.length >= 2) {
-    const firstInit = parts[0][0];
-    for (const m of matches) {
-      const fn = normalizeName(m.liveName).split(' ')[0];
-      if (fn[0] === firstInit) return m.data;
-    }
-  }
-  return null;
-}
-
-async function fetchLiveScores() {
-  if (new Date() < TOURNAMENT_START) { updateLiveBadge(false); return; }
-  try {
-    const poolPar = (S.activePool && S.activePool.par) || PAR;
-    const poolCutTop = (S.activePool && S.activePool.cut_top) || CUT_TOP;
-    // Fetch both endpoints in parallel
-    const [resp, sbResp] = await Promise.all([fetch(ESPN_GOLF_URL), fetch(ESPN_SCOREBOARD_URL).catch(() => null)]);
-    if (!resp.ok) return;
-    const json = await resp.json();
-
-    // Parse scoreboard hole data
-    const sbHoles = {};
-    try {
-      if (sbResp && sbResp.ok) {
-        const sbJson = await sbResp.json();
-        const sbEvent = (sbJson.events || [])[0];
-        if (sbEvent) {
-          const sbComp = (sbEvent.competitions || [])[0];
-          for (const c of (sbComp?.competitors || [])) {
-            const name = (c.athlete?.displayName || '').replace(/\s*\(a\)\s*$/, '');
-            if (!name) continue;
-            const holes = {};
-            for (let i = 0; i < (c.linescores || []).length && i < 4; i++) {
-              const roundHoles = c.linescores[i].linescores || [];
-              if (roundHoles.length > 0) {
-                holes['r' + (i + 1)] = roundHoles.map(h => ({
-                  hole: h.period, score: h.value,
-                  par: h.scoreType ? h.scoreType.displayValue : null
-                }));
-              }
-            }
-            if (Object.keys(holes).length > 0) sbHoles[name] = holes;
-          }
-        }
-      }
-    } catch(e) { /* scoreboard hole data is best-effort */ }
-
-    const events = json.events || [];
-    // Find the most relevant active event (use tournament name from pool config if available)
-    let targetEvent = null;
-    const poolTournament = S.activePool?.tournament_name;
-    if (poolTournament) {
-      targetEvent = events.find(e => e.name && normalizeName(e.name).includes(normalizeName(poolTournament)));
-    }
-    if (!targetEvent) targetEvent = events[0];
-    if (!targetEvent) { updateLiveBadge(false); return; }
-
-    S.liveEventName = targetEvent.name || 'Tournament';
-    const eventState = targetEvent.status?.type?.state || '';
-    S.tournamentLive = eventState === 'in';
-    S.tournamentFinished = eventState === 'post' || targetEvent.status?.type?.completed === true;
-    S.eventFinished = S.tournamentFinished;
-
-    const competitions = targetEvent.competitions || [];
-    if (competitions.length === 0) { updateLiveBadge(false); return; }
-
-    const comp = competitions[0];
-    const competitors = comp.competitors || [];
-    const scores = {};
-
-    for (const c of competitors) {
-      const athlete = c.athlete || {};
-      const rawName = athlete.displayName || athlete.shortName || '';
-      if (!rawName) continue;
-      const isAmateur = c.amateur || /\(a\)\s*$/.test(rawName);
-      const name = rawName.replace(/\s*\(a\)\s*$/, '');
-
-      const linescores = c.linescores || [];
-      const roundScores = {};
-      const holes = {};
-      let currentRound = 0;
-      let finished = true;
-      let thruHoles = '';
-
-      for (let i = 0; i < linescores.length && i < 4; i++) {
-        const roundData = linescores[i];
-        const dv = roundData.displayValue;
-        const roundHoles = roundData.linescores || [];
-        const holesPlayed = roundHoles.length;
-
-        if (holesPlayed > 0) {
-          holes['r' + (i + 1)] = roundHoles.map(h => ({
-            hole: h.period, score: h.value,
-            par: h.scoreType ? h.scoreType.displayValue : null
-          }));
-        }
-
-        if (dv !== undefined && dv !== null && dv !== '-') {
-          const roundToPar = dv === 'E' ? 0 : parseInt(dv);
-          if (!isNaN(roundToPar)) {
-            if (holesPlayed >= 18) {
-              roundScores['r' + (i + 1)] = poolPar + roundToPar;
-            } else if (holesPlayed > 0) {
-              currentRound = i + 1;
-              finished = false;
-              thruHoles = '' + holesPlayed;
-              roundScores['r' + (i + 1) + '_toPar'] = roundToPar;
-            } else {
-              const laterRoundHasData = linescores.slice(i + 1).some(ls => {
-                const ldv = ls.displayValue;
-                return ldv && ldv !== '-' && ldv !== 'None';
-              });
-              const statusDone = c.status?.type?.state === 'post' || (c.status?.period > i + 1);
-              if (laterRoundHasData || statusDone) {
-                roundScores['r' + (i + 1)] = poolPar + roundToPar;
-              }
-            }
-          }
-        }
-      }
-
-      const status = c.status || {};
-      const statusThru = status.thru > 0 ? '' + status.thru : '';
-      const statusType = status.type?.name || '';
-      const statusState = status.type?.state || '';
-
-      if (currentRound === 0 && statusState === 'in' && status.period > 0 && status.thru > 0) {
-        currentRound = status.period;
-        finished = false;
-        thruHoles = '' + status.thru;
-        const rdIdx = currentRound - 1;
-        if (rdIdx < linescores.length) {
-          const rdDV = linescores[rdIdx].displayValue;
-          const rdToPar = rdDV === 'E' ? 0 : parseInt(rdDV);
-          if (!isNaN(rdToPar)) roundScores['r' + currentRound + '_toPar'] = rdToPar;
-        }
-      }
-
-      const scoreObj = c.score || {};
-      const scoreDV = typeof scoreObj === 'object' ? (scoreObj.displayValue || '') : scoreObj;
-      let totalToPar = scoreDV === 'E' || scoreDV === '-' ? 0 : parseInt(scoreDV) || 0;
-      if (currentRound > 0 && !finished) {
-        let calcTP = 0;
-        for (let r = 1; r <= 4; r++) {
-          if (roundScores['r' + r]) calcTP += roundScores['r' + r] - poolPar;
-          else if (roundScores['r' + r + '_toPar'] !== undefined) calcTP += roundScores['r' + r + '_toPar'];
-        }
-        totalToPar = calcTP;
-      }
-      const thru = statusThru || thruHoles;
-
-      const stName = (statusType || '').toLowerCase();
-      const stDesc = (status.type?.description || '').toLowerCase();
-      let outStatus = null;
-      if (stName === 'cut' || stDesc.includes('cut')) outStatus = 'cut';
-      else if (stName === 'wd' || stName === 'status_wd' || stDesc.includes('withdraw')) outStatus = 'wd';
-      else if (stName === 'dq' || stName === 'status_dq' || stDesc.includes('disqual')) outStatus = 'dq';
-
-      const isCut = outStatus === 'cut';
-      const teeTime = status.teeTime || null;
-      const startHole = status.startHole || 1;
-      const nextRound = status.period || 0;
-      const roundTeeTimes = linescores.map(ls => ls.teeTime || null);
-      const mergedHoles = Object.keys(holes).length > 0 ? holes : (sbHoles[name] || {});
-
-      scores[name] = {
-        ...roundScores,
-        holes: mergedHoles,
-        toPar: totalToPar,
-        thru,
-        status: isCut ? 'cut' : (outStatus || statusType),
-        outStatus,
-        madeCut: !isCut && outStatus !== 'wd' && outStatus !== 'dq',
-        _amateur: isAmateur,
-        currentRound,
-        finished,
-        statusState,
-        teeTime,
-        startHole,
-        nextRound,
-        roundTeeTimes,
-        headshot: c.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/golf/players/full/${c.id}.png&w=96&h=70` : '',
-        position: status.position?.displayName || '',
-        sortOrder: c.sortOrder || 999
-      };
-    }
-
-    // Auto-detect cut: Top N + Ties
-    const allScores = Object.values(scores);
-    const anyoneMidRound = allScores.some(s => !s.finished && s.currentRound > 0);
-    const withR2 = allScores.filter(s => s.r1 && s.r2);
-    if (!anyoneMidRound && withR2.length > poolCutTop) {
-      const r2ToPar = s => (s.r1 + s.r2) - poolPar * 2;
-      const sorted = [...withR2].sort((a, b) => r2ToPar(a) - r2ToPar(b));
-      let proCount = 0;
-      let cutScore = null;
-      for (const s of sorted) {
-        if (!s._amateur) proCount++;
-        if (proCount === poolCutTop) { cutScore = r2ToPar(s); break; }
-      }
-      if (cutScore === null) cutScore = r2ToPar(sorted[sorted.length - 1]);
-      S.actualCut = cutScore;
-      for (const [n, s] of Object.entries(scores)) {
-        if (s.r1 && s.r2 && r2ToPar(s) > cutScore && s.status !== 'cut') {
-          s.status = 'cut';
-          s.outStatus = 'cut';
-          s.madeCut = false;
-        }
-      }
-    }
-    // Detect cut from ESPN data
-    if (S.actualCut === null && allScores.some(s => s.status === 'cut' || s.outStatus === 'cut')) {
-      const cutPlayers = allScores.filter(s => (s.status === 'cut' || s.outStatus === 'cut') && s.toPar !== undefined);
-      if (cutPlayers.length > 0) {
-        S.actualCut = Math.min(...cutPlayers.map(s => s.toPar)) - 1;
-      }
-    }
-
-    // Projected cut line
-    S.projectedCut = null;
-    if (!S.actualCut) S.actualCut = null;
-    const withScores = allScores.filter(s => s.toPar !== undefined && s.status !== 'cut' && s.status !== 'wd' && s.status !== 'dq');
-    if (withScores.length > poolCutTop && !S.eventFinished) {
-      const sorted = [...withScores].sort((a, b) => a.toPar - b.toPar);
-      let proCount = 0;
-      for (const s of sorted) {
-        if (!s._amateur) proCount++;
-        if (proCount === poolCutTop) { S.projectedCut = s.toPar; break; }
-      }
-    }
-
-    S.liveScores = scores;
-    S.liveLastUpdate = new Date();
-    const anyonePlaying = S.tournamentLive && Object.values(scores).some(s => !s.finished && s.currentRound > 0);
-    S.liveActive = anyonePlaying;
-    updateLiveBadge(anyonePlaying);
-
-    // Skip render if data hasn't changed
-    const fingerprint = Object.entries(scores).map(([n, s]) => `${n}:${s.toPar}:${s.thru}:${s.statusState}`).join('|');
-    const changed = fingerprint !== S._lastFingerprint;
-    S._lastFingerprint = fingerprint;
-
-    refreshOpenScorecard();
-
-    if (changed) {
-      Object.values(scores).forEach(s => { if (s.headshot) { new Image().src = s.headshot; } });
-      // Auto-freeze when tournament ends
-      if (S.tournamentFinished && S.activePool && !localStorage.getItem('pga_frozen_' + S.activePool.id)) {
-        freezePoolScores();
-      }
-      render();
-    }
-  } catch (err) {
-    console.warn('Live scoring fetch failed:', err);
-    S.liveActive = false;
-    updateLiveBadge(false);
-  }
-}
-
-async function freezePoolScores() {
-  if (!S.activePool) return;
-  const poolPar = S.activePool.par || PAR;
-  const pid = S.activePool.id;
-  const upserts = [];
-  for (const p of S.poolPicks) {
-    const live = matchGolferToLive(p.golfer_name);
-    if (!live) continue;
-    for (let r = 1; r <= 4; r++) {
-      const sc = live['r' + r];
-      if (!sc) continue;
-      const existing = S.poolScores.find(s => s.pool_id === pid && s.golfer_name === p.golfer_name && s.round === r && s.score > 0);
-      if (existing) continue;
-      upserts.push({ pool_id: pid, golfer_name: p.golfer_name, round: r, score: sc, user_id: 'auto-freeze' });
-    }
-  }
-  if (upserts.length > 0) {
-    await sb.from('pool_scores').insert(upserts);
-  }
-  localStorage.setItem('pga_frozen_' + pid, '1');
-  await loadPoolData();
-  render();
-  console.log('Pool scores frozen:', upserts.length, 'scores saved');
-}
-
-function refreshOpenScorecard() {
-  if (!S._openScorecardName) return;
-  const overlay = document.getElementById('modalScorecard');
-  if (!overlay || !overlay.classList.contains('open')) { S._openScorecardName = null; return; }
-  const data = S.liveScores[S._openScorecardName];
-  if (!data) return;
-  // Re-render scorecard content with latest data
-  renderScorecardContent(S._openScorecardName, data);
 }
 
 function buildPoolSnapshot() {
@@ -1897,16 +1541,10 @@ async function initApp() {
       await loadTournament();
       subscribeDraftRealtime();
     }
-    // Setup identity from auth
-    if (S.userProfile) {
-      S.myName = S.userProfile.name;
-    }
   }
 
-  // Always fetch ESPN live data (works for guests too)
-  fetchLiveScores();
-
   updateTabs();
+  // Default-Tab: leaderboard wenn Pool, sonst profil
   const defaultTab = S.activePool ? 'leaderboard' : (S.isGuest ? 'leaderboard' : 'profile');
   switchTab(defaultTab);
 }
@@ -1965,505 +1603,91 @@ function renderRangliste() {
   if (!c) return;
   if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
 
-  // Meine Golfer Strip
-  const meineHtml = renderMeineGolfer();
+  // Ranking: Summe der Scores aller gedrafteten Golfer pro Member
+  const rows = S.poolMembers.map(m => {
+    const picks = S.poolPicks.filter(p => p.member_id === m.id);
+    const golferNames = picks.map(p => p.golfer_name);
+    let total = 0;
+    for (const gn of golferNames) {
+      const golfer = S.tournamentGolfers.find(tg => tg.name === gn);
+      if (golfer && golfer.total_score !== null) total += golfer.total_score;
+    }
+    return { member: m, picks: golferNames, total, picksCount: picks.length };
+  }).sort((a, b) => a.total - b.total);
 
-  const ranking = getPoolRanking();
-  const poolPar = S.activePool.par || PAR;
-
-  if (ranking.length === 0) {
-    c.innerHTML = meineHtml + '<div class="empty">Noch keine Mitspieler im Pool</div>';
+  if (rows.length === 0) {
+    c.innerHTML = '<div class="empty">Noch keine Mitspieler im Pool</div>';
     return;
   }
 
-  // Compute ranks with ties
-  let rank = 0, prevTotal = null;
-  ranking.forEach((t, i) => {
-    if (!t.isEliminated) {
-      if (t.total !== prevTotal) rank = i + 1;
-      prevTotal = t.total;
-    }
-    t._rank = t.isEliminated ? 0 : rank;
-  });
-  const rankCounts = {};
-  ranking.forEach(t => { if (t._rank > 0) rankCounts[t._rank] = (rankCounts[t._rank] || 0) + 1; });
-  ranking.forEach(t => { t._tied = rankCounts[t._rank] > 1; });
-
-  let html = meineHtml;
-  html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.activePool.name)}</div>`;
+  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.activePool.name)}</div>`;
 
   if (S.activePool.status === 'draft') {
-    html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">Draft aktiv</div>`;
+    html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">Draft läuft — Rangliste wird sichtbar sobald das Turnier startet</div>`;
   }
 
-  // FLIP: capture old positions
-  const oldPositions = {};
-  c.querySelectorAll('.lb-entry[data-id]').forEach(el => {
-    oldPositions[el.dataset.id] = el.getBoundingClientRect().top;
-  });
-
-  ranking.forEach((t, i) => {
-    const isMe = t.user_id && t.user_id === S.userId;
-    const eliminated = t.isEliminated;
-    const rankDisplay = eliminated ? '&times;' : (t._tied ? 'T' + t._rank : t._rank);
-    const totalCls = t.total !== null ? (t.total < 0 ? 'under' : t.total > 0 ? 'over' : 'even') : '';
-
-    // Golfer chips
-    const picks = S.poolPicks.filter(p => p.member_id === t.member_id);
-    const chipsHtml = picks.map(p => {
-      const live = matchGolferToLive(p.golfer_name);
-      const isOut = isPoolGolferOut(p.golfer_name);
-      // Determine if counting
-      const cls = isOut ? 'cut' : '';
-      return `<span class="lb-golfer-chip ${cls}" style="cursor:pointer" onclick="event.stopPropagation();showScorecardByName('${esc(p.golfer_name).replace(/'/g, "\\'")}')">${esc(shortName(p.golfer_name))} ${live ? fmtScore(live.toPar) : ''}</span>`;
-    }).join('');
-
-    // Round scores
-    const roundsHtml = t.rounds.map((r, ri) => `<span style="font-size:11px;padding:1px 5px;border-radius:4px;background:var(--bg2)">${fmtScore(r)}</span>`).join(' ');
-
-    html += `<div class="lb-entry${eliminated ? ' eliminated' : ''}${isMe ? ' mine' : ''}${t._rank === 1 && !eliminated ? ' rank-1' : ''}" data-id="${t.member_id}" onclick="this.classList.toggle('open')" style="cursor:pointer;flex-wrap:wrap">
-      <div class="lb-rank">${rankDisplay}</div>
-      <div style="width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
-      <div class="lb-info" style="flex:1;min-width:0">
-        <div class="lb-name">${esc(t.name)}${eliminated ? '<span class="eliminated-badge">ELIMINATED</span>' : ''}</div>
-        <div class="lb-detail">${roundsHtml}</div>
+  rows.forEach((r, i) => {
+    const isMe = r.member.user_id && r.member.user_id === S.userId;
+    html += `<div style="background:${isMe ? 'var(--green-dim)' : 'var(--card)'};border:1px solid ${isMe ? 'var(--green)' : 'var(--border)'};border-radius:var(--radius);padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:20px;font-weight:700;color:var(--text2);min-width:24px;text-align:center">${i + 1}</div>
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--green);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">${memberInitials(r.member)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:15px">${esc(memberName(r.member))}${r.member.is_placeholder ? ' <span style="font-size:10px;color:var(--text3);font-weight:400">(Platzhalter)</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.picksCount}/5 Picks</div>
       </div>
-      <div class="lb-score">
-        <div class="lb-total ${totalCls}">${fmtScore(t.total)}</div>
-        ${t.bonus > 0 ? `<div class="lb-bonus">Bonus: -${t.bonus}</div>` : ''}
-      </div>
-      <div class="lb-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div>
-      <div class="lb-expand" style="width:100%"><div class="lb-expand-inner">
-        <div class="lb-golfers" style="margin-bottom:0">${chipsHtml}</div>
-      </div></div>
+      <div style="font-family:var(--font-display);font-size:20px;font-weight:700" class="${scoreClass(r.total)}">${fmtScore(r.total)}</div>
     </div>`;
   });
-
   c.innerHTML = html;
-
-  // FLIP animation
-  if (Object.keys(oldPositions).length > 0) {
-    requestAnimationFrame(() => {
-      c.querySelectorAll('.lb-entry[data-id]').forEach(el => {
-        const id = el.dataset.id;
-        if (oldPositions[id] === undefined) return;
-        const delta = oldPositions[id] - el.getBoundingClientRect().top;
-        if (Math.abs(delta) < 2) return;
-        el.style.transform = `translateY(${delta}px)`;
-        el.style.transition = 'none';
-        requestAnimationFrame(() => {
-          el.style.transition = 'transform 0.5s cubic-bezier(.25,.8,.25,1)';
-          el.style.transform = '';
-        });
-      });
-    });
-  }
 }
 
 /* ===================== Render: Leaderboard (Turnier Live) ===================== */
 function renderLeaderboardTab() {
   const c = getSubContainer('leaderboard');
   if (!c) return;
-
-  const hasLive = Object.keys(S.liveScores).length > 0;
-
-  if (!hasLive) {
+  if (!S.activePool) {
+    c.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:14px;color:var(--text2)">Erstelle oder tritt einem Pool bei, um das Turnier-Leaderboard zu sehen.</div></div>';
+    return;
+  }
+  if (!S.tournament) {
     c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
-      <div style="font-size:48px;margin-bottom:12px">&#9971;</div>
-      <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">${S.liveEventName || 'Turnier-Leaderboard'}</div>
-      <div style="font-size:13px;color:var(--text2)">Live-Scores werden von ESPN geladen...</div>
-      <div class="spinner" style="margin-top:16px"></div>
+      <div style="font-size:48px;margin-bottom:12px">⛳️</div>
+      <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">Noch kein Turnier verknüpft</div>
+      <div style="font-size:13px;color:var(--text2)">Pool-Admin kann im Admin-Tab ein Turnier zuweisen.</div>
     </div>`;
     return;
   }
-
-  // Meine Golfer Strip
-  const meineHtml = renderMeineGolfer();
+  if (S.tournamentGolfers.length === 0) {
+    c.innerHTML = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">${esc(S.tournament.name)}</div>
+      <div class="empty" style="padding:40px 20px;text-align:center">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Turnier-Daten werden geladen…</div>
+        <div style="font-size:11px;color:var(--text3)">Live-Scores kommen in Phase 2 vom ESPN-Worker.</div>
+      </div>`;
+    return;
+  }
 
   // Picks-Map: golferName → memberName(s)
   const golferOwners = {};
-  if (S.activePool) {
-    S.poolPicks.forEach(p => {
-      const m = S.poolMembers.find(mm => mm.id === p.member_id);
-      if (!m) return;
-      const norm = normalizeName(p.golfer_name);
-      for (const [liveName] of Object.entries(S.liveScores)) {
-        if (normalizeName(liveName) === norm) {
-          (golferOwners[liveName] = golferOwners[liveName] || []).push(memberName(m));
-          break;
-        }
-      }
-      // Also store under original pick name
-      (golferOwners[p.golfer_name] = golferOwners[p.golfer_name] || []).push(memberName(m));
-    });
-  }
+  S.poolPicks.forEach(p => {
+    const m = S.poolMembers.find(mm => mm.id === p.member_id);
+    if (!m) return;
+    (golferOwners[p.golfer_name] = golferOwners[p.golfer_name] || []).push(memberName(m));
+  });
 
-  // My golfer names (for highlighting)
-  const myMember = S.activePool ? S.poolMembers.find(m => m.user_id === S.userId) : null;
-  const myGolferNames = new Set();
-  if (myMember) {
-    S.poolPicks.filter(p => p.member_id === myMember.id).forEach(p => {
-      myGolferNames.add(normalizeName(p.golfer_name));
-    });
-  }
-
-  // Sort golfers
-  const entries = Object.entries(S.liveScores).sort((a, b) => a[1].sortOrder - b[1].sortOrder);
-
-  // Round tabs
-  const rd = S.lbRoundFilter || 0;
-  const days = ['Gesamt','Do','Fr','Sa','So'];
-  const roundTabsHtml = `<div class="round-tabs">${days.map((d, i) =>
-    `<button class="round-tab${rd === i ? ' active' : ''}" onclick="S.lbRoundFilter=${i};render()">${d}</button>`
-  ).join('')}</div>`;
-
-  // Re-sort by round score if specific round selected
-  if (rd > 0) {
-    entries.sort((a, b) => {
-      const aOut = a[1].outStatus ? 1 : 0;
-      const bOut = b[1].outStatus ? 1 : 0;
-      if (aOut !== bOut) return aOut - bOut;
-      const aRound = a[1]['r' + rd] ? a[1]['r' + rd] - ((S.activePool?.par) || PAR) : (a[1]['r' + rd + '_toPar'] ?? 999);
-      const bRound = b[1]['r' + rd] ? b[1]['r' + rd] - ((S.activePool?.par) || PAR) : (b[1]['r' + rd + '_toPar'] ?? 999);
-      return aRound - bRound;
-    });
-  }
-
-  // Separate favorites
-  const favSet = new Set(S.favorites || []);
-  const favEntries = entries.filter(([name]) => favSet.has(name));
-  const otherEntries = entries.filter(([name]) => !favSet.has(name));
-
-  let html = meineHtml;
-  html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.liveEventName)}</div>`;
-  html += roundTabsHtml;
-
-  // Render entries
-  const poolPar = (S.activePool?.par) || PAR;
-
-  function renderGolferEntry(name, data, showFavStar) {
-    const isMine = myGolferNames.has(normalizeName(name));
-    const owners = golferOwners[name];
-    const isFav = favSet.has(name);
-    const isCut = data.outStatus === 'cut' || data.outStatus === 'wd' || data.outStatus === 'dq';
-
-    let displayScore, thruDisplay;
-    if (rd === 0) {
-      displayScore = data.toPar;
-      thruDisplay = data.finished ? '' : (data.thru || '');
-    } else {
-      const roundScore = data['r' + rd];
-      if (roundScore) {
-        displayScore = roundScore - poolPar;
-        thruDisplay = '';
-      } else if (data['r' + rd + '_toPar'] !== undefined) {
-        displayScore = data['r' + rd + '_toPar'];
-        thruDisplay = data.thru || '';
-      } else {
-        displayScore = null;
-        thruDisplay = '';
-      }
-    }
-
-    const totalCls = displayScore !== null ? (displayScore < 0 ? 'under' : displayScore > 0 ? 'over' : 'even') : '';
-    const statusBadge = data.outStatus === 'cut' ? '<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px">CUT</span>'
-      : data.outStatus === 'wd' ? '<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px">WD</span>'
-      : data.outStatus === 'dq' ? '<span style="font-size:9px;color:var(--red);font-weight:600;margin-left:4px">DQ</span>' : '';
-
-    // Tee time for pre-round
-    let teeTimeHtml = '';
-    if (!isCut && data.statusState === 'pre' && data.teeTime) {
-      const t = new Date(data.teeTime);
-      teeTimeHtml = `<div style="font-size:10px;color:var(--text3)">${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}</div>`;
-    }
-
-    return `<div class="lb-entry${isCut ? ' eliminated' : ''}${isMine ? ' mine' : ''}" data-name="${esc(name)}" style="cursor:pointer" onclick="showScorecardByName('${esc(name).replace(/'/g, "\\'")}')">
-      <div class="lb-rank" style="font-size:14px">${data.position || ''}</div>
-      ${data.headshot ? `<img class="mg-avatar" src="${data.headshot}" onerror="this.style.display='none'" style="width:28px;height:28px">` : ''}
-      <div class="lb-info" style="min-width:0;flex:1">
-        <div class="lb-name" style="${isCut ? 'text-decoration:line-through;color:var(--text3)' : ''}">${esc(name)}${data._amateur ? ' <span style="font-size:9px;color:var(--text3)">(a)</span>' : ''}${statusBadge}</div>
+  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.tournament.name)}</div>`;
+  S.tournamentGolfers.forEach((g, i) => {
+    const owners = golferOwners[g.name];
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:12px">
+      <div style="min-width:28px;font-size:13px;font-weight:600;color:var(--text2);text-align:center">${g.position || (i + 1)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px;${g.status === 'cut' ? 'text-decoration:line-through;color:var(--text3)' : ''}">${esc(g.name)}</div>
         ${owners ? `<div style="font-size:10px;color:var(--green);font-weight:600">${owners.map(esc).join(' · ')}</div>` : ''}
       </div>
-      <div style="text-align:right;display:flex;align-items:center;gap:6px">
-        ${thruDisplay ? `<div style="font-size:10px;color:var(--text3)">${thruDisplay}</div>` : ''}
-        ${teeTimeHtml}
-        <div class="lb-total ${totalCls}" style="font-size:18px">${fmtScore(displayScore)}</div>
-      </div>
-      ${showFavStar ? `<div class="fav-btn${isFav ? ' active' : ''}" onclick="event.stopPropagation();toggleFavorite('${esc(name).replace(/'/g, "\\'")}')">
-        <svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-      </div>` : ''}
+      <div style="font-size:11px;color:var(--text3);min-width:36px;text-align:right">${g.thru || ''}</div>
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:700;min-width:40px;text-align:right" class="${scoreClass(g.total_score)}">${fmtScore(g.total_score)}</div>
     </div>`;
-  }
-
-  // Favorites section
-  if (favEntries.length > 0) {
-    html += '<div class="fav-divider">Favoriten</div>';
-    html += favEntries.map(([name, data]) => renderGolferEntry(name, data, true)).join('');
-    html += '<div class="fav-divider">Alle Spieler</div>';
-  }
-
-  // Cut line detection
-  const cutScore = S.actualCut ?? S.projectedCut;
-  const cutLabel = S.actualCut !== null ? 'CUT' : (S.projectedCut !== null ? 'PROJECTED CUT' : null);
-  let cutInserted = false;
-
-  // Other entries
-  otherEntries.forEach(([name, data]) => {
-    // Insert cut line before first player above cut
-    if (rd === 0 && cutLabel && !cutInserted && data.outStatus === 'cut') {
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;margin:4px 0">
-        <div style="flex:1;height:1px;background:var(--red)"></div>
-        <div style="font-size:10px;color:var(--red);font-weight:600;letter-spacing:1px">${cutLabel} ${fmtScore(cutScore)}</div>
-        <div style="flex:1;height:1px;background:var(--red)"></div>
-      </div>`;
-      cutInserted = true;
-    }
-    html += renderGolferEntry(name, data, true);
   });
-
-  // FLIP animation
-  const list = c;
-  const oldPositions = {};
-  list.querySelectorAll('.lb-entry[data-name]').forEach(el => {
-    oldPositions[el.dataset.name] = el.getBoundingClientRect().top;
-  });
-
   c.innerHTML = html;
-
-  // Animate position changes
-  if (Object.keys(oldPositions).length > 0) {
-    requestAnimationFrame(() => {
-      list.querySelectorAll('.lb-entry[data-name]').forEach(el => {
-        const name = el.dataset.name;
-        if (oldPositions[name] === undefined) return;
-        const newTop = el.getBoundingClientRect().top;
-        const delta = oldPositions[name] - newTop;
-        if (Math.abs(delta) < 2) return;
-        el.style.transform = `translateY(${delta}px)`;
-        el.style.transition = 'none';
-        requestAnimationFrame(() => {
-          el.style.transition = 'transform 0.5s cubic-bezier(.25,.8,.25,1)';
-          el.style.transform = '';
-        });
-      });
-    });
-  }
-}
-
-function toggleFavorite(name) {
-  const idx = S.favorites.indexOf(name);
-  if (idx >= 0) S.favorites.splice(idx, 1);
-  else S.favorites.push(name);
-  localStorage.setItem('pga_favorites', JSON.stringify(S.favorites));
-  render();
-}
-
-function showScorecardByName(playerName) {
-  const data = S.liveScores[playerName];
-  if (!data) {
-    // Try fuzzy match
-    for (const [name, d] of Object.entries(S.liveScores)) {
-      if (normalizeName(name) === normalizeName(playerName)) {
-        S._openScorecardName = name;
-        renderScorecardContent(name, d);
-        openModal('modalScorecard');
-        return;
-      }
-    }
-    showToast('Keine Scorecard-Daten');
-    return;
-  }
-  S._openScorecardName = playerName;
-  renderScorecardContent(playerName, data);
-  openModal('modalScorecard');
-}
-
-function renderScorecardContent(name, live) {
-  const poolPar = (S.activePool?.par) || PAR;
-
-  // Header
-  const owners = [];
-  if (S.activePool) {
-    S.poolPicks.forEach(p => {
-      if (normalizeName(p.golfer_name) === normalizeName(name)) {
-        const m = S.poolMembers.find(mm => mm.id === p.member_id);
-        if (m) owners.push(memberName(m));
-      }
-    });
-  }
-
-  const headerHtml = `<div class="scorecard-header">
-    ${live.headshot ? `<img class="scorecard-avatar" src="${live.headshot}" onerror="this.style.display='none'">` : `<div class="scorecard-avatar-fallback">${name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
-    <div class="scorecard-header-info">
-      <div style="font-family:var(--font-display);font-size:20px;color:var(--text)">${esc(name)}</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
-        <span style="font-size:12px;color:var(--text2)">${live.position || ''}</span>
-        <span style="font-family:var(--font-display);font-size:18px;font-weight:700" class="${live.toPar < 0 ? 'under' : live.toPar > 0 ? 'over' : 'even'}">${fmtScore(live.toPar)}</span>
-        ${live.thru && !live.finished ? `<span style="font-size:11px;color:var(--text3)">thru ${live.thru}</span>` : ''}
-      </div>
-      ${owners.length > 0 ? `<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px">${owners.map(esc).join(' · ')}</div>` : ''}
-    </div>
-  </div>`;
-
-  // Hole-by-hole scorecard
-  function holeClass(relPar) {
-    if (relPar === null || relPar === undefined) return 'sc-par';
-    if (relPar <= -2) return 'sc-eagle';
-    if (relPar === -1) return 'sc-birdie';
-    if (relPar === 1) return 'sc-bogey';
-    if (relPar >= 2) return 'sc-dbl';
-    return 'sc-par';
-  }
-
-  function buildNine(start, end, label) {
-    const activeRounds = [];
-    for (let r = 1; r <= 4; r++) {
-      if (live.holes && live.holes['r' + r] && live.holes['r' + r].length > 0) activeRounds.push(r);
-    }
-    if (activeRounds.length === 0) return '';
-
-    let t = '<table class="scorecard"><thead><tr><th>Loch</th>';
-    for (let i = start; i <= end; i++) t += `<th class="hole-num">${i}</th>`;
-    t += `<th>${label}</th></tr></thead><tbody>`;
-
-    // Par row (from hole data)
-    t += '<tr style="background:var(--bg)"><td style="font-weight:600;font-size:10px">PAR</td>';
-    let parSum = 0;
-    for (let i = start; i <= end; i++) {
-      // Get par from first available round's hole data
-      let holePar = null;
-      for (const r of activeRounds) {
-        const h = (live.holes['r' + r] || []).find(x => x.hole === i);
-        if (h && h.par) {
-          const parMap = { 'Birdie': -1, 'Eagle': -2, 'Bogey': 1, 'Double Bogey': 2, 'Par': 0, 'Ace': null };
-          const rel = parMap[h.par];
-          if (rel !== undefined && rel !== null) { holePar = h.score - rel; }
-          break;
-        }
-      }
-      if (!holePar) holePar = poolPar / 18 > 3.5 ? 4 : 3; // rough fallback
-      parSum += holePar;
-      t += `<td style="font-size:10px;color:var(--text3)">${holePar}</td>`;
-    }
-    t += `<td style="font-size:10px;font-weight:600">${parSum}</td></tr>`;
-
-    // Score rows per round
-    for (const r of activeRounds) {
-      const roundHoles = live.holes['r' + r] || [];
-      t += `<tr><td style="font-weight:600;font-size:10px">R${r}</td>`;
-      let sum = 0; let count = 0;
-      for (let i = start; i <= end; i++) {
-        const h = roundHoles.find(x => x.hole === i);
-        if (h && h.score) {
-          const parMap = { 'Birdie': -1, 'Eagle': -2, 'Bogey': 1, 'Double Bogey': 2, 'Par': 0, 'Ace': -100 };
-          const rel = parMap[h.par] ?? 0;
-          const cls = holeClass(rel);
-          sum += h.score; count++;
-          t += `<td data-sc="r${r}h${i}"><span class="${cls}">${h.score}</span></td>`;
-        } else {
-          t += '<td></td>';
-        }
-      }
-      t += `<td style="font-weight:600">${count > 0 ? sum : ''}</td></tr>`;
-    }
-    t += '</tbody></table>';
-    return t;
-  }
-
-  // Pre-start: show tee time
-  let bodyHtml = '';
-  if (live.statusState === 'pre' && live.teeTime) {
-    const t = new Date(live.teeTime);
-    bodyHtml += `<div style="text-align:center;padding:20px 0;color:var(--text2);font-size:14px">Tee Time: ${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')} (Loch ${live.startHole || 1})</div>`;
-  }
-
-  bodyHtml += buildNine(1, 9, 'OUT');
-  bodyHtml += buildNine(10, 18, 'IN');
-
-  // Summary
-  if (live.holes && Object.keys(live.holes).length > 0) {
-    bodyHtml += '<div style="display:flex;justify-content:flex-end;gap:12px;padding:8px 0;font-size:12px">';
-    for (let r = 1; r <= 4; r++) {
-      if (live['r' + r]) {
-        const rtp = live['r' + r] - poolPar;
-        bodyHtml += `<span>R${r}: <strong class="${rtp < 0 ? 'under' : rtp > 0 ? 'over' : 'even'}">${fmtScore(rtp)}</strong></span>`;
-      } else if (live['r' + r + '_toPar'] !== undefined) {
-        bodyHtml += `<span>R${r}: <strong class="${live['r'+r+'_toPar'] < 0 ? 'under' : live['r'+r+'_toPar'] > 0 ? 'over' : 'even'}">${fmtScore(live['r'+r+'_toPar'])}</strong> (${live.thru})</span>`;
-      }
-    }
-    bodyHtml += '</div>';
-  }
-
-  document.getElementById('scorecardTitle').innerHTML = headerHtml;
-  document.getElementById('scorecardContent').innerHTML = bodyHtml;
-}
-
-/* ===================== Meine Golfer Strip ===================== */
-function renderMeineGolfer() {
-  if (!S.activePool) return '';
-  const myMember = S.poolMembers.find(m => m.user_id === S.userId);
-  if (!myMember) return '';
-  const myPicks = S.poolPicks.filter(p => p.member_id === myMember.id);
-  if (myPicks.length === 0) return '';
-
-  const poolPar = S.activePool.par || PAR;
-
-  // Build golfer cards
-  const golfers = myPicks.map(p => {
-    const live = matchGolferToLive(p.golfer_name);
-    return { name: p.golfer_name, live };
-  });
-
-  // Sort: active by score, cut/wd last
-  golfers.sort((a, b) => {
-    const aOut = a.live?.outStatus ? 1 : 0;
-    const bOut = b.live?.outStatus ? 1 : 0;
-    if (aOut !== bOut) return aOut - bOut;
-    const aTP = a.live?.toPar ?? 999;
-    const bTP = b.live?.toPar ?? 999;
-    return aTP - bTP;
-  });
-
-  // Determine counting golfers (best N)
-  let maxRound = 0;
-  golfers.forEach(g => { if (g.live?.currentRound > maxRound) maxRound = g.live.currentRound; });
-  const countNeeded = maxRound <= 2 ? 4 : 3;
-  const activeGolfers = golfers.filter(g => !g.live?.outStatus);
-  const counting = new Set(activeGolfers.slice(0, countNeeded).map(g => g.name));
-
-  // Team total
-  const ranking = getPoolRanking();
-  const myTeam = ranking.find(r => r.member_id === myMember.id);
-  const teamTotal = myTeam ? myTeam.total : null;
-
-  let html = '<div class="mg-strip">';
-  html += `<div class="mg-title" style="display:flex;justify-content:space-between;align-items:center">
-    <span>Meine Golfer</span>
-    <span style="font-family:var(--font-display);font-size:16px;font-weight:700" class="${teamTotal !== null ? (teamTotal < 0 ? 'under' : teamTotal > 0 ? 'over' : 'even') : ''}">${teamTotal !== null ? fmtScore(teamTotal) : ''}</span>
-  </div>`;
-  html += '<div class="mg-scroll">';
-
-  golfers.forEach(g => {
-    const l = g.live;
-    const isCounting = counting.has(g.name);
-    const isCut = l?.outStatus;
-    const scoreDisplay = l ? fmtScore(l.toPar) : '—';
-    const scoreCls = l ? (l.toPar < 0 ? 'under' : l.toPar > 0 ? 'over' : 'even') : '';
-    const thru = l && !l.finished && l.thru ? l.thru : '';
-
-    html += `<div class="mg-card${isCounting ? ' counting' : ''}${isCut ? ' cut' : ''}" onclick="showScorecardByName('${esc(g.name).replace(/'/g, "\\'")}')">
-      ${l?.headshot ? `<img class="mg-avatar" src="${l.headshot}" onerror="this.outerHTML='<div class=mg-avatar-fb>${g.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>'">` : `<div class="mg-avatar-fb">${g.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
-      <div class="mg-info">
-        <div class="mg-name">${esc(shortName(g.name))}</div>
-        <div class="mg-score ${scoreCls}">${scoreDisplay}</div>
-        ${thru ? `<div class="mg-thru">${thru}</div>` : ''}
-        ${isCut ? `<div class="mg-cut">${l.outStatus === 'wd' ? 'WD' : l.outStatus === 'dq' ? 'DQ' : 'CUT'}</div>` : ''}
-      </div>
-    </div>`;
-  });
-
-  html += '</div></div>';
-  return html;
 }
 
 /* ===================== Render: Draft ===================== */
@@ -2474,288 +1698,39 @@ function renderDraftTab() {
   renderPoolDraft(c);
 }
 
-/* ===================== Render: Stats ===================== */
-function computeAllStats() {
-  const stats = [];
-  const poolPar = (S.activePool?.par) || PAR;
-
-  // Picks map for team badges
-  const golferTeams = {};
-  if (S.activePool) {
-    S.poolPicks.forEach(p => {
-      const m = S.poolMembers.find(mm => mm.id === p.member_id);
-      if (m) golferTeams[normalizeName(p.golfer_name)] = memberName(m);
-    });
-  }
-
-  for (const [name, data] of Object.entries(S.liveScores)) {
-    if (data.outStatus === 'wd' || data.outStatus === 'dq') continue;
-    const holes = data.holes || {};
-    let birdies = 0, eagles = 0, bogeys = 0, doubles = 0, pars = 0;
-    let totalScore = 0, totalHoles = 0;
-    let par3s = [], par4s = [], par5s = [];
-    let front9 = [], back9 = [];
-    let birdieStreak = 0, maxBirdieStreak = 0;
-    let bogeyFreeStreak = 0, maxBogeyFreeStreak = 0;
-
-    for (let r = 1; r <= 4; r++) {
-      const roundHoles = holes['r' + r] || [];
-      let rFront = 0, rFrontCount = 0, rBack = 0, rBackCount = 0;
-      for (const h of roundHoles) {
-        if (!h.score || !h.par) continue;
-        const parMap = { 'Birdie': -1, 'Eagle': -2, 'Bogey': 1, 'Double Bogey': 2, 'Par': 0, 'Ace': -100 };
-        const rel = parMap[h.par] ?? 0;
-        const holePar = h.score - rel;
-        totalScore += h.score; totalHoles++;
-
-        if (rel <= -2) { eagles++; birdieStreak++; bogeyFreeStreak++; }
-        else if (rel === -1) { birdies++; birdieStreak++; bogeyFreeStreak++; }
-        else if (rel === 0) { pars++; birdieStreak = 0; bogeyFreeStreak++; }
-        else if (rel === 1) { bogeys++; birdieStreak = 0; bogeyFreeStreak = 0; }
-        else { doubles++; birdieStreak = 0; bogeyFreeStreak = 0; }
-
-        if (birdieStreak > maxBirdieStreak) maxBirdieStreak = birdieStreak;
-        if (bogeyFreeStreak > maxBogeyFreeStreak) maxBogeyFreeStreak = bogeyFreeStreak;
-
-        if (holePar === 3) par3s.push(rel);
-        else if (holePar === 4) par4s.push(rel);
-        else if (holePar === 5) par5s.push(rel);
-
-        if (h.hole <= 9) { rFront += h.score; rFrontCount++; }
-        else { rBack += h.score; rBackCount++; }
-      }
-      if (rFrontCount === 9) front9.push(rFront);
-      if (rBackCount === 9) back9.push(rBack);
-    }
-
-    const avg = arr => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-    const team = golferTeams[normalizeName(name)] || null;
-
-    stats.push({
-      name, team,
-      headshot: data.headshot,
-      birdies, eagles, bogeys: bogeys + doubles,
-      scoringAvg: totalHoles > 0 ? Math.round(totalScore / totalHoles * 100) / 100 : null,
-      par3Avg: avg(par3s) !== null ? Math.round(avg(par3s) * 100) / 100 : null,
-      par4Avg: avg(par4s) !== null ? Math.round(avg(par4s) * 100) / 100 : null,
-      par5Avg: avg(par5s) !== null ? Math.round(avg(par5s) * 100) / 100 : null,
-      front9Avg: avg(front9) !== null ? Math.round(avg(front9) * 10) / 10 : null,
-      back9Avg: avg(back9) !== null ? Math.round(avg(back9) * 10) / 10 : null,
-      birdieStreak: maxBirdieStreak,
-      bogeyFreeStreak: maxBogeyFreeStreak
-    });
-  }
-  return stats;
-}
-
+/* ===================== Render: Stats (Phase 1 stub) ===================== */
 function renderStatsTab() {
   const c = getSubContainer('stats');
   if (!c) return;
-
-  if (Object.keys(S.liveScores).length === 0) {
-    c.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:14px;color:var(--text2)">Stats werden angezeigt sobald Loch-Daten verfügbar sind.</div></div>';
-    return;
-  }
-
-  const allStats = computeAllStats();
-  if (allStats.length === 0) { c.innerHTML = '<div class="empty">Keine Daten</div>'; return; }
-
-  const myMember = S.activePool ? S.poolMembers.find(m => m.user_id === S.userId) : null;
-  const myGolfers = new Set();
-  if (myMember) {
-    S.poolPicks.filter(p => p.member_id === myMember.id).forEach(p => myGolfers.add(normalizeName(p.golfer_name)));
-  }
-
-  const categories = [
-    { key: 'birdies', label: 'Meiste Birdies', desc: true },
-    { key: 'eagles', label: 'Meiste Eagles', desc: true, filter: v => v > 0 },
-    { key: 'bogeys', label: 'Wenigste Bogeys', desc: false },
-    { key: 'scoringAvg', label: 'Scoring-Durchschnitt', desc: false, filter: v => v !== null },
-    { key: 'par3Avg', label: 'Beste Par-3 Performance', desc: false, filter: v => v !== null },
-    { key: 'par4Avg', label: 'Beste Par-4 Performance', desc: false, filter: v => v !== null },
-    { key: 'par5Avg', label: 'Beste Par-5 Performance', desc: false, filter: v => v !== null },
-    { key: 'front9Avg', label: 'Beste Front 9', desc: false, filter: v => v !== null },
-    { key: 'back9Avg', label: 'Beste Back 9', desc: false, filter: v => v !== null },
-    { key: 'birdieStreak', label: 'Birdie-Streak', desc: true, filter: v => v > 0 },
-    { key: 'bogeyFreeStreak', label: 'Bogey-Free Streak', desc: true }
-  ];
-
-  let html = '';
-  categories.forEach((cat, ci) => {
-    let data = [...allStats];
-    if (cat.filter) data = data.filter(s => cat.filter(s[cat.key]));
-    data.sort((a, b) => cat.desc ? b[cat.key] - a[cat.key] : a[cat.key] - b[cat.key]);
-    if (data.length === 0) return;
-
-    const open = ci < 4 ? ' open' : '';
-    html += `<div class="st-category${open}" onclick="this.classList.toggle('open')">
-      <div class="st-category-header">${cat.label}<span class="st-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div>
-      <div class="st-body" style="${open ? 'max-height:400px' : ''}">`;
-
-    const top = data.slice(0, 3);
-    top.forEach((s, i) => {
-      const isMine = myGolfers.has(normalizeName(s.name));
-      const fmtVal = typeof s[cat.key] === 'number' ? (Number.isInteger(s[cat.key]) ? s[cat.key] : s[cat.key].toFixed(2)) : s[cat.key];
-      html += `<div class="st-row${isMine ? ' mine' : ''}">
-        <div class="st-rank">${i + 1}</div>
-        <div class="st-name">${esc(shortName(s.name))}${s.team ? `<span class="st-team">${esc(s.team)}</span>` : ''}</div>
-        <div class="st-val">${fmtVal}</div>
-      </div>`;
-    });
-
-    if (data.length > 3) {
-      html += `<div class="st-more" onclick="event.stopPropagation();openStPanel('${cat.label}','${cat.key}',${cat.desc})">Alle ${data.length} anzeigen</div>`;
-    }
-    html += '</div></div>';
-  });
-
-  c.innerHTML = html;
-}
-
-function openStPanel(label, key, desc) {
-  const allStats = computeAllStats();
-  let data = [...allStats];
-  const cat = { key, desc };
-  data.sort((a, b) => desc ? b[key] - a[key] : a[key] - b[key]);
-  data = data.filter(s => s[key] !== null && s[key] !== undefined);
-
-  const myMember = S.activePool ? S.poolMembers.find(m => m.user_id === S.userId) : null;
-  const myGolfers = new Set();
-  if (myMember) {
-    S.poolPicks.filter(p => p.member_id === myMember.id).forEach(p => myGolfers.add(normalizeName(p.golfer_name)));
-  }
-
-  document.getElementById('stPanelTitle').textContent = label;
-  let html = '';
-  data.forEach((s, i) => {
-    const isMine = myGolfers.has(normalizeName(s.name));
-    const fmtVal = typeof s[key] === 'number' ? (Number.isInteger(s[key]) ? s[key] : s[key].toFixed(2)) : s[key];
-    html += `<div class="st-row${isMine ? ' mine' : ''}">
-      <div class="st-rank">${i + 1}</div>
-      <div class="st-name">${esc(shortName(s.name))}${s.team ? `<span class="st-team">${esc(s.team)}</span>` : ''}</div>
-      <div class="st-val">${fmtVal}</div>
-    </div>`;
-  });
-  document.getElementById('stPanelBody').innerHTML = html;
-  document.getElementById('stPanel').classList.add('open');
-}
-
-function closeStPanel() {
-  document.getElementById('stPanel').classList.remove('open');
+  if (!S.activePool) { c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
+  c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">📊</div>
+    <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">Stats kommen in Phase 2</div>
+    <div style="font-size:13px;color:var(--text2)">Sobald Live-Scores verfügbar sind.</div>
+  </div>`;
 }
 
 /* ===================== Render: Payouts ===================== */
-function calcPayouts(pot, ranking) {
-  const prizes = [0.6, 0.3, 0.1].map(p => Math.round(pot * p * 100) / 100);
-  const result = ranking.map(r => ({ ...r, payout: 0 }));
-  // Tie-splitting: tied positions share sum of their prizes
-  let i = 0;
-  while (i < result.length && i < 3) {
-    let j = i;
-    while (j < result.length && result[j].total === result[i].total && result[j].total !== null) j++;
-    const tiedCount = j - i;
-    let tiedSum = 0;
-    for (let k = i; k < Math.min(j, 3); k++) tiedSum += prizes[k] || 0;
-    const share = Math.round(tiedSum / tiedCount * 100) / 100;
-    for (let k = i; k < j; k++) result[k].payout = share;
-    i = j;
-  }
-  return result;
-}
-
 function renderPayoutsTab() {
   const c = getSubContainer('payouts');
   if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   const pool = S.activePool;
   const numMembers = S.poolMembers.length;
-  const pot = numMembers * (pool.entry_fee || 0);
-  const ranking = getPoolRanking().filter(r => !r.isEliminated);
-  const withPayouts = calcPayouts(pot, ranking);
-  const entryFee = pool.entry_fee || 0;
-
-  // My member
-  const myMember = S.poolMembers.find(m => m.user_id === S.userId);
-  const myName = myMember ? memberName(myMember) : null;
-
-  // Podium (top 3)
-  const top3 = withPayouts.slice(0, Math.min(3, withPayouts.length));
-  // Reorder for podium: [2nd, 1st, 3rd]
-  const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
-  const barHeights = [64, 44, 28];
-  const barClasses = ['p1', 'p2', 'p3'];
-  const placeLabels = ['gold', 'silver', 'bronze'];
-
-  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:4px">${esc(pool.name)}</div>`;
-  html += `<div style="font-size:12px;color:var(--text2);margin-bottom:16px">${numMembers} Mitspieler · Pot: ${fmtMoney(pot)}</div>`;
-
-  // Podium
-  if (top3.length >= 3) {
-    const podiumItems = [
-      { data: top3[1], place: 2, cls: 'silver', bar: 'p2' },
-      { data: top3[0], place: 1, cls: 'gold', bar: 'p1' },
-      { data: top3[2], place: 3, cls: 'bronze', bar: 'p3' }
-    ];
-    html += '<div class="podium">';
-    podiumItems.forEach(p => {
-      const isMine = p.data.name === myName;
-      html += `<div class="podium-slot${isMine ? ' mine' : ''}">
-        <div class="podium-place ${p.cls}">${p.place}.</div>
-        <div class="podium-name">${esc(p.data.name)}</div>
-        <div class="podium-amount">${fmtMoney(p.data.payout)}</div>
-        <div class="podium-bar ${p.bar}"></div>
-      </div>`;
-    });
-    html += '</div>';
-  }
-
-  // Full ranking with payouts
-  html += '<div class="payout-card open"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Rangliste<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body">';
-  withPayouts.forEach((r, i) => {
-    const net = r.payout - entryFee;
-    const isMine = r.name === myName;
-    html += `<div class="payout-row${isMine ? ' mine' : ''}">
-      <span style="min-width:28px;font-weight:600">${i + 1}.</span>
-      <span class="payout-name" style="flex:1">${esc(r.name)}</span>
-      <span style="font-size:11px;color:var(--text3);margin-right:8px">${fmtScore(r.total)}</span>
-      <span class="payout-amount ${r.payout > 0 ? 'positive' : ''}">${r.payout > 0 ? fmtMoney(r.payout) : '—'}</span>
+  const pot = numMembers * pool.entry_fee;
+  const p1 = Math.round(pot * 0.6);
+  const p2 = Math.round(pot * 0.3);
+  const p3 = pot - p1 - p2;
+  c.innerHTML = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(pool.name)}</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.5px">POT</div>
+      <div style="font-family:var(--font-display);font-size:36px;color:var(--green);font-weight:700">${fmtMoney(pot)}</div>
+      <div style="font-size:12px;color:var(--text2)">${numMembers} Mitspieler × ${fmtMoney(pool.entry_fee)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥇</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--green)">${fmtMoney(p1)}</div><div style="font-size:11px;color:var(--text3)">60%</div></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥈</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700">${fmtMoney(p2)}</div><div style="font-size:11px;color:var(--text3)">30%</div></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center"><div style="font-size:24px">🥉</div><div style="font-family:var(--font-display);font-size:18px;font-weight:700">${fmtMoney(p3)}</div><div style="font-size:11px;color:var(--text3)">10%</div></div>
     </div>`;
-  });
-  html += '</div></div>';
-
-  // Transfers (wer schuldet wem)
-  const balances = withPayouts.map(r => ({ name: r.name, net: Math.round((r.payout - entryFee) * 100) / 100 }));
-  const creditors = balances.filter(b => b.net > 0).sort((a, b) => b.net - a.net);
-  const debtors = balances.filter(b => b.net < 0).sort((a, b) => a.net - b.net);
-  const transfers = [];
-  let ci = 0, di = 0;
-  const cBal = creditors.map(c => ({ ...c }));
-  const dBal = debtors.map(d => ({ ...d, net: Math.abs(d.net) }));
-  while (ci < cBal.length && di < dBal.length) {
-    const amount = Math.min(cBal[ci].net, dBal[di].net);
-    if (amount > 0.01) {
-      transfers.push({ from: dBal[di].name, to: cBal[ci].name, amount: Math.round(amount * 100) / 100 });
-    }
-    cBal[ci].net -= amount;
-    dBal[di].net -= amount;
-    if (cBal[ci].net < 0.01) ci++;
-    if (dBal[di].net < 0.01) di++;
-  }
-
-  if (transfers.length > 0) {
-    html += '<div class="payout-card open"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Abrechnung<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body"><div class="transfer-section">';
-    transfers.forEach(t => {
-      const isMine = t.from === myName || t.to === myName;
-      html += `<div class="transfer-card${isMine ? ' mine' : ''}">
-        <div class="transfer-from">${esc(t.from)}</div>
-        <div class="transfer-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
-        <div class="transfer-to">${esc(t.to)}</div>
-        <div class="transfer-amount">${fmtMoney(t.amount)}</div>
-      </div>`;
-    });
-    html += '</div></div></div>';
-  }
-
-  c.innerHTML = html;
 }
 
 /* ===================== Render: Regeln ===================== */
@@ -3026,36 +2001,26 @@ function filterGolferList() {
   const list = document.getElementById('golferList');
   if (!list) return;
   const q = (document.getElementById('inputGolferName').value || '').trim().toLowerCase();
-  const taken = new Set(S.poolPicks.map(p => normalizeName(p.golfer_name)));
-
-  // Use ESPN live data as primary field source, fallback to tournament_golfers
-  let golfers = [];
-  if (Object.keys(S.liveScores).length > 0) {
-    golfers = Object.entries(S.liveScores).map(([name, data]) => ({
-      name, position: data.position, toPar: data.toPar, sortOrder: data.sortOrder
-    })).sort((a, b) => a.sortOrder - b.sortOrder);
-  } else if (S.tournamentGolfers && S.tournamentGolfers.length > 0) {
-    golfers = S.tournamentGolfers.map(g => ({ name: g.name, position: g.position, toPar: g.total_score }));
-  }
-
+  const taken = new Set(S.poolPicks.map(p => p.golfer_name.toLowerCase()));
+  let golfers = S.tournamentGolfers || [];
   if (golfers.length === 0) {
-    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Noch keine Turnierdaten. Scores werden automatisch von ESPN geladen.</div>';
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Kein Turnier verknüpft. Admin → "PGA-Turnier zuweisen"</div>';
     return;
   }
   const filtered = golfers
-    .filter(g => !q || fuzzyMatch(g.name, q))
+    .filter(g => !q || g.name.toLowerCase().includes(q))
     .slice(0, 50);
   if (filtered.length === 0) {
     list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nichts gefunden</div>';
     return;
   }
   list.innerHTML = filtered.map(g => {
-    const isTaken = taken.has(normalizeName(g.name));
+    const isTaken = taken.has(g.name.toLowerCase());
     return `<div onclick="${isTaken ? '' : `pickGolfer('${esc(g.name).replace(/'/g, "\\'")}')`}"
       style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:${isTaken ? 'not-allowed' : 'pointer'};opacity:${isTaken ? '0.4' : '1'}">
       <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}${isTaken ? ' <span style="font-size:10px;color:var(--text3)">(gewählt)</span>' : ''}</div>
       <div style="font-size:12px;color:var(--text3);min-width:32px;text-align:right">${g.position || ''}</div>
-      <div style="font-family:var(--font-display);font-size:14px;font-weight:700;min-width:32px;text-align:right" class="${scoreClass(g.toPar)}">${fmtScore(g.toPar)}</div>
+      <div style="font-family:var(--font-display);font-size:14px;font-weight:700;min-width:32px;text-align:right" class="${scoreClass(g.total_score)}">${fmtScore(g.total_score)}</div>
     </div>`;
   }).join('');
 }
@@ -3153,7 +2118,6 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (e.target === overlay) {
       overlay.classList.remove('open');
       if (overlay.id === 'modalDraftPick') S.draftModalOpen = false;
-      if (overlay.id === 'modalScorecard') S._openScorecardName = null;
     }
   });
   overlay.addEventListener('touchmove', e => {
@@ -3203,80 +2167,19 @@ function shortName(fullName) {
   return parts.slice(1).join(' ') + ' ' + parts[0][0] + '.';
 }
 
-function updateLiveBadge(active) {
+function updateLiveBadge() {
   const badge = document.getElementById('liveBadge');
-  const text = document.getElementById('liveText');
-  if (!badge || !text) return;
-  if (!S.tournamentLive && !S.tournamentFinished && new Date() < TOURNAMENT_START) {
-    badge.style.display = 'none';
-    return;
-  }
-  if (S.tournamentFinished) {
-    badge.style.display = 'inline-flex';
-    badge.classList.add('stale');
-    text.textContent = 'Beendet';
-    return;
-  }
-  if (active && S.liveLastUpdate) {
-    badge.style.display = 'inline-flex';
-    badge.classList.remove('stale');
-    let maxRound = 0;
-    if (S.liveScores) {
-      for (const s of Object.values(S.liveScores)) {
-        if (s.currentRound > maxRound) maxRound = s.currentRound;
-      }
-    }
-    text.textContent = maxRound > 0 ? `R${maxRound} Live` : 'Live';
-  } else {
-    badge.style.display = 'none';
-  }
+  if (badge) badge.style.display = 'none';
 }
 
 function startLiveRefresh() {
-  // ESPN Live Polling
-  fetchLiveScores();
-  S.liveTimer = setInterval(fetchLiveScores, LIVE_REFRESH_MS);
-  S._currentInterval = LIVE_REFRESH_MS;
-
-  // Adaptive polling: adjust interval based on tournament state
-  S.badgeTimer = setInterval(() => {
-    updateLiveBadge(S.liveActive);
-    let desired;
-    if (S.tournamentFinished) desired = 0;
-    else if (S.tournamentLive) desired = LIVE_REFRESH_MS;
-    else desired = IDLE_REFRESH_MS;
-    if (S._currentInterval !== desired) {
-      clearInterval(S.liveTimer);
-      if (desired > 0) S.liveTimer = setInterval(fetchLiveScores, desired);
-      S._currentInterval = desired;
+  // Tournament-Polling (Worker hat Daten alle 2min im Schnitt)
+  setInterval(async () => {
+    if (S.activePool && S.activePool.tournament_id) {
+      await loadTournament();
+      if (S.activeTab === 'leaderboard' || S.activeTab === 'rangliste') render();
     }
-  }, 30000);
-
-  // Visibility API: pause in background, resume on foreground
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      clearInterval(S.liveTimer);
-      clearInterval(S.badgeTimer);
-      S.liveTimer = null;
-      S.badgeTimer = null;
-    } else {
-      fetchLiveScores();
-      const interval = S._currentInterval || LIVE_REFRESH_MS;
-      if (interval > 0) S.liveTimer = setInterval(fetchLiveScores, interval);
-      S.badgeTimer = setInterval(() => {
-        updateLiveBadge(S.liveActive);
-        let desired;
-        if (S.tournamentFinished) desired = 0;
-        else if (S.tournamentLive) desired = LIVE_REFRESH_MS;
-        else desired = IDLE_REFRESH_MS;
-        if (S._currentInterval !== desired) {
-          clearInterval(S.liveTimer);
-          if (desired > 0) S.liveTimer = setInterval(fetchLiveScores, desired);
-          S._currentInterval = desired;
-        }
-      }, 30000);
-    }
-  });
+  }, 60000);
 
   // Draft-Polling: schneller wenn im Draft-Tab
   setInterval(async () => {
