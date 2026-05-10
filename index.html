@@ -385,33 +385,27 @@ body::before{content:'';position:fixed;inset:0;background:
       <div style="font-size:13px;color:var(--text2);margin-top:4px">Golf Pool mit Freunden</div>
     </div>
 
-    <!-- Tab Toggle -->
-    <div style="display:flex;background:var(--bg2);border-radius:10px;overflow:hidden;margin-bottom:20px;border:1px solid var(--border)">
-      <button id="authTabLogin" onclick="switchAuthTab('login')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--green);color:#fff;transition:all .15s">Anmelden</button>
-      <button id="authTabRegister" onclick="switchAuthTab('register')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--text2);transition:all .15s">Registrieren</button>
+    <!-- Magic Link Form -->
+    <div id="authMagic">
+      <input class="input" type="text" id="loginName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
+      <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
+      <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendMagicLink()" style="width:100%;padding:14px;font-size:15px">Magic Link senden</button>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">Du bekommst einen Login-Link per Mail. Ein Klick — eingeloggt.</div>
     </div>
 
-    <!-- Login Form -->
-    <div id="authLogin">
-      <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
-      <input class="input" type="password" id="loginPassword" placeholder="Passwort" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
-      <button class="btn btn-primary btn-block" onclick="doAuthLogin()" style="width:100%;padding:14px;font-size:15px">Anmelden</button>
-      <div onclick="doPasswordReset()" style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px;cursor:pointer">Passwort vergessen?</div>
-    </div>
-
-    <!-- Register Form -->
-    <div id="authRegister" style="display:none">
-      <input class="input" type="text" id="registerName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
-      <input class="input" type="email" id="registerEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
-      <input class="input" type="password" id="registerPassword" placeholder="Passwort (min. 6 Zeichen)" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px">
-      <button class="btn btn-primary btn-block" onclick="doAuthRegister()" style="width:100%;padding:14px;font-size:15px">Konto erstellen</button>
+    <!-- Magic Link Sent State -->
+    <div id="authMagicSent" style="display:none;text-align:center;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:12px">
+      <div style="font-size:36px;margin-bottom:8px">📧</div>
+      <div style="font-weight:600;margin-bottom:6px">Check dein Postfach</div>
+      <div style="font-size:13px;color:var(--text2)">Wir haben dir einen Login-Link an <span id="sentEmail" style="font-weight:600;color:var(--text)"></span> geschickt. Auf dem Handy öffnen, klicken — du landest direkt im Pool.</div>
+      <div onclick="resetAuthForm()" style="font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">Andere Adresse verwenden</div>
     </div>
 
     <!-- Error -->
     <div id="authError" style="display:none;margin-top:12px;padding:10px 14px;background:var(--red-bg);color:var(--red);border-radius:8px;font-size:13px;text-align:center"></div>
 
     <!-- Skip (Leaderboard ohne Login) -->
-    <div onclick="skipAuth()" style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px;cursor:pointer">Ohne Konto fortfahren (nur Leaderboard)</div>
+    <div onclick="skipAuth()" style="text-align:center;font-size:12px;color:var(--text3);margin-top:20px;cursor:pointer">Ohne Login fortfahren (nur Leaderboard)</div>
   </div>
 </div>
 
@@ -768,17 +762,46 @@ body::before{content:'';position:fixed;inset:0;background:
   <div class="modal">
     <div class="modal-handle"></div>
     <h3 style="font-family:var(--font-display);font-size:20px;color:var(--green);margin-bottom:16px">Pool erstellen</h3>
-    <input class="input" type="text" id="poolName" placeholder="Pool-Name (z.B. Masters 2026)" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
-    <input class="input" type="text" id="poolTournament" placeholder="Turnier-Name für ESPN (optional)" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
+    <input class="input" type="text" id="poolName" placeholder="Pool-Name (z.B. PGA Champ 2026)" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
+
+    <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Turnier</label>
+    <select id="poolTournamentId" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px"></select>
+
     <div style="display:flex;gap:10px;margin-bottom:10px">
       <div style="flex:1">
-        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">PAR</label>
-        <input class="input" type="number" id="poolPar" value="72" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Mitspieler</label>
+        <select id="poolNumMembers" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6" selected>6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+        </select>
       </div>
       <div style="flex:1">
-        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Cut (Top N)</label>
-        <input class="input" type="number" id="poolCutTop" value="50" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Picks/Spieler</label>
+        <select id="poolPicksPerMember" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+        </select>
       </div>
+      <div style="flex:1">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Timer</label>
+        <select id="poolPickSeconds" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
+          <option value="30">30s</option>
+          <option value="60" selected>60s</option>
+          <option value="90">90s</option>
+          <option value="120">2min</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:10px">
       <div style="flex:1">
         <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Einsatz €</label>
         <input class="input" type="number" id="poolEntryFee" value="20" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px">
@@ -863,16 +886,6 @@ let S = {
 /* ===================== Auth ===================== */
 let currentUser = null;
 
-function switchAuthTab(tab) {
-  document.getElementById('authLogin').style.display = tab === 'login' ? '' : 'none';
-  document.getElementById('authRegister').style.display = tab === 'register' ? '' : 'none';
-  document.getElementById('authTabLogin').style.background = tab === 'login' ? 'var(--green)' : 'transparent';
-  document.getElementById('authTabLogin').style.color = tab === 'login' ? '#fff' : 'var(--text2)';
-  document.getElementById('authTabRegister').style.background = tab === 'register' ? 'var(--green)' : 'transparent';
-  document.getElementById('authTabRegister').style.color = tab === 'register' ? '#fff' : 'var(--text2)';
-  document.getElementById('authError').style.display = 'none';
-}
-
 function showAuthError(msg) {
   const el = document.getElementById('authError');
   el.textContent = msg;
@@ -881,45 +894,64 @@ function showAuthError(msg) {
   el.style.color = 'var(--red)';
 }
 
-async function doAuthLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass = document.getElementById('loginPassword').value;
-  if (!email || !pass) { showAuthError('Bitte E-Mail und Passwort eingeben'); return; }
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { showAuthError(error.message); return; }
-  await onAuthSuccess(data.user);
+function resetAuthForm() {
+  document.getElementById('authMagic').style.display = '';
+  document.getElementById('authMagicSent').style.display = 'none';
+  document.getElementById('authError').style.display = 'none';
 }
 
-async function doAuthRegister() {
-  const name = document.getElementById('registerName').value.trim();
-  const email = document.getElementById('registerEmail').value.trim();
-  const pass = document.getElementById('registerPassword').value;
-  if (!name || !email || !pass) { showAuthError('Bitte alle Felder ausfüllen'); return; }
-  if (pass.length < 6) { showAuthError('Passwort muss mindestens 6 Zeichen haben'); return; }
-  const { data, error } = await sb.auth.signUp({ email, password: pass });
+async function doSendMagicLink() {
+  const name = document.getElementById('loginName').value.trim();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  if (!name) { showAuthError('Bitte Name eingeben'); return; }
+  if (!email || !email.includes('@')) { showAuthError('Bitte gültige E-Mail eingeben'); return; }
+
+  // Name + ggf. eingeladener Pool-Code für Erstanmeldung mitsenden
+  sessionStorage.setItem('pgaPool_pendingName', name);
+
+  const btn = document.getElementById('btnSendMagicLink');
+  btn.disabled = true;
+  btn.textContent = 'Sende…';
+  document.getElementById('authError').style.display = 'none';
+
+  // Magic-Link kommt auf die aktuelle URL zurück (inkl. ?pool=CODE Query-Param)
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href,
+      data: { name }
+    }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Magic Link senden';
+
   if (error) { showAuthError(error.message); return; }
-  // Create user profile
-  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  await sb.from('users').insert({ id: data.user.id, name, email, avatar_initials: initials });
-  await onAuthSuccess(data.user);
+
+  document.getElementById('sentEmail').textContent = email;
+  document.getElementById('authMagic').style.display = 'none';
+  document.getElementById('authMagicSent').style.display = '';
 }
 
 async function onAuthSuccess(user) {
+  if (currentUser && currentUser.id === user.id && document.getElementById('app').style.display !== 'none') return;
   currentUser = user;
   S.userId = user.id;
   S.isGuest = false;
   // Load user profile
   let { data: profile, error: profErr } = await sb.from('users').select('*').eq('id', user.id).maybeSingle();
   if (profErr) console.warn('[auth] profile load error', profErr);
-  // Falls users-Zeile fehlt (z.B. Login ohne vorherige Registration), automatisch anlegen
+  // Falls users-Zeile fehlt (Erstanmeldung via Magic Link), automatisch anlegen
   if (!profile) {
-    const fallbackName = user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
+    const pendingName = sessionStorage.getItem('pgaPool_pendingName');
+    const fallbackName = pendingName || user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
     const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     const { data: inserted, error: insErr } = await sb.from('users')
       .insert({ id: user.id, name: fallbackName, email: user.email, avatar_initials: initials })
       .select().single();
     if (insErr) console.warn('[auth] auto-create users row failed', insErr);
     profile = inserted;
+    sessionStorage.removeItem('pgaPool_pendingName');
   }
   S.userProfile = profile;
   S.userId = user.id;
@@ -927,18 +959,6 @@ async function onAuthSuccess(user) {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('app').style.display = '';
   await initApp();
-}
-
-async function doPasswordReset() {
-  const email = document.getElementById('loginEmail').value.trim();
-  if (!email) { showAuthError('Bitte E-Mail eingeben'); return; }
-  const { error } = await sb.auth.resetPasswordForEmail(email);
-  if (error) { showAuthError(error.message); return; }
-  const el = document.getElementById('authError');
-  el.textContent = 'Password-Reset E-Mail gesendet!';
-  el.style.display = '';
-  el.style.background = 'rgba(27,58,92,.08)';
-  el.style.color = 'var(--green)';
 }
 
 function skipAuth() {
@@ -960,17 +980,57 @@ async function doLogout() {
 }
 
 /* ===================== Pool Management ===================== */
+async function loadTournamentsForCreate() {
+  const sel = document.getElementById('poolTournamentId');
+  if (!sel) return;
+  const { data, error } = await sb.from('tournaments')
+    .select('id, name, par, cut_top, start_date, status')
+    .in('status', ['upcoming', 'in_progress'])
+    .order('start_date', { ascending: true });
+  if (error) { console.warn('[tournaments]', error); return; }
+  sel.innerHTML = (data || []).map(t => {
+    const d = new Date(t.start_date);
+    const dStr = d.toLocaleDateString('de-AT', { day: '2-digit', month: 'short' });
+    return `<option value="${t.id}" data-name="${esc(t.name)}" data-par="${t.par}" data-cuttop="${t.cut_top}">${esc(t.name)} — ${dStr}</option>`;
+  }).join('');
+}
+
+async function openCreatePoolModal() {
+  await loadTournamentsForCreate();
+  // Auto-Pool-Name aus gewähltem Turnier
+  const sel = document.getElementById('poolTournamentId');
+  const nameInput = document.getElementById('poolName');
+  if (sel && nameInput && !nameInput.value && sel.selectedOptions[0]) {
+    nameInput.value = sel.selectedOptions[0].dataset.name + ' Pool';
+  }
+  openModal('modalCreatePool');
+}
+
 async function createPool() {
   const name = document.getElementById('poolName').value.trim();
   if (!name) { showToast('Bitte Pool-Name eingeben'); return; }
-  const tournament = document.getElementById('poolTournament').value.trim() || null;
-  const par = parseInt(document.getElementById('poolPar').value) || 72;
-  const cutTop = parseInt(document.getElementById('poolCutTop').value) || 50;
+  const sel = document.getElementById('poolTournamentId');
+  const tournamentId = sel?.value || null;
+  const tournamentName = sel?.selectedOptions[0]?.dataset.name || null;
+  const par = parseInt(sel?.selectedOptions[0]?.dataset.par) || 72;
+  const cutTop = parseInt(sel?.selectedOptions[0]?.dataset.cuttop) || 50;
   const entryFee = parseFloat(document.getElementById('poolEntryFee').value) || 20;
+  const numMembers = parseInt(document.getElementById('poolNumMembers').value) || 6;
+  const picksPerMember = parseInt(document.getElementById('poolPicksPerMember').value) || 4;
+  const pickSeconds = parseInt(document.getElementById('poolPickSeconds').value) || 60;
 
   const { data: pool, error } = await sb.from('pools').insert({
-    name, tournament_name: tournament, par, cut_top: cutTop,
-    entry_fee: entryFee, created_by: S.userId
+    name,
+    tournament_id: tournamentId,
+    tournament_name: tournamentName,
+    par,
+    cut_top: cutTop,
+    entry_fee: entryFee,
+    num_members_target: numMembers,
+    picks_per_member: picksPerMember,
+    pick_seconds: pickSeconds,
+    status: 'lobby',
+    created_by: S.userId
   }).select().single();
 
   if (error) { showToast('Fehler: ' + error.message); return; }
@@ -982,7 +1042,11 @@ async function createPool() {
   S.activePool = pool;
   closeModal('modalCreatePool');
   await loadPoolData();
+  await loadTournament();
+  subscribeDraftRealtime();
+  subscribePoolRealtime();
   updateTabs();
+  switchTab('draft');
   render();
   showToast('Pool erstellt!');
   showInviteLink(pool);
@@ -1000,8 +1064,10 @@ async function joinPoolFromInput() {
     await loadPoolData();
     await loadTournament();
     subscribeDraftRealtime();
+    subscribePoolRealtime();
+    if (S.activePool.status === 'drafting') ensurePickTimer();
     updateTabs();
-    switchTab('leaderboard');
+    switchTab(S.activePool.status === 'lobby' || S.activePool.status === 'drafting' ? 'draft' : 'leaderboard');
   }
 }
 
@@ -1062,7 +1128,8 @@ async function loadPoolData() {
 
 function updateTabs() {
   const hasPool = !!S.activePool;
-  const inDraft = hasPool && S.activePool?.status === 'draft';
+  const status = S.activePool?.status;
+  const inDraft = hasPool && (status === 'lobby' || status === 'drafting' || status === 'draft');
   const isGuest = S.isGuest;
 
   const tabConfig = {
@@ -1155,7 +1222,7 @@ function renderProfile() {
     </div>`;
   } else {
     html += `<div style="text-align:center;padding:20px 0">
-      <button class="btn btn-primary" onclick="openModal('modalCreatePool')" style="padding:12px 24px;font-size:14px">Pool erstellen</button>
+      <button class="btn btn-primary" onclick="openCreatePoolModal()" style="padding:12px 24px;font-size:14px">Pool erstellen</button>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0">
       <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:10px">EINLADUNGSLINK</div>
@@ -1428,12 +1495,19 @@ function matchGolferToLive(golferName) {
 }
 
 async function fetchLiveScores() {
-  if (new Date() < TOURNAMENT_START) { updateLiveBadge(false); return; }
   try {
     const poolPar = (S.activePool && S.activePool.par) || PAR;
     const poolCutTop = (S.activePool && S.activePool.cut_top) || CUT_TOP;
+    // Wenn Pool ein spezifisches Tournament referenziert, ESPN-Endpoint per Event-ID nutzen
+    const espnEventId = S.tournament?.espn_event_id;
+    const lbUrl = espnEventId
+      ? `https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga&event=${espnEventId}`
+      : ESPN_GOLF_URL;
+    const sbUrl = espnEventId
+      ? `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${espnEventId}`
+      : ESPN_SCOREBOARD_URL;
     // Fetch both endpoints in parallel
-    const [resp, sbResp] = await Promise.all([fetch(ESPN_GOLF_URL), fetch(ESPN_SCOREBOARD_URL).catch(() => null)]);
+    const [resp, sbResp] = await Promise.all([fetch(lbUrl), fetch(sbUrl).catch(() => null)]);
     if (!resp.ok) return;
     const json = await resp.json();
 
@@ -1853,6 +1927,7 @@ function isMyTurn() {
 
 /* ===================== Realtime ===================== */
 let _draftChannel = null;
+let _poolChannel = null;
 
 function subscribeDraftRealtime() {
   if (!S.activePool) return;
@@ -1868,7 +1943,48 @@ function subscribeDraftRealtime() {
       if (S.poolPicks.some(p => p.id === payload.new.id)) return;
       S.poolPicks.push(payload.new);
       const member = S.poolMembers.find(m => m.id === payload.new.member_id);
-      showToast(`${memberName(member)} hat ${payload.new.golfer_name} gedraftet`);
+      if (member) showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
+      render();
+    })
+    .subscribe();
+}
+
+function subscribePoolRealtime() {
+  if (!S.activePool) return;
+  if (_poolChannel) sb.removeChannel(_poolChannel);
+
+  _poolChannel = sb.channel('pool-' + S.activePool.id)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'pools',
+      filter: `id=eq.${S.activePool.id}`
+    }, async (payload) => {
+      const wasStatus = S.activePool.status;
+      Object.assign(S.activePool, payload.new);
+      if (wasStatus === 'lobby' && payload.new.status === 'drafting') {
+        showToast('Draft gestartet!');
+      }
+      if (payload.new.status === 'drafting') ensurePickTimer();
+      else stopPickTimer();
+      render();
+    })
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'pool_members',
+      filter: `pool_id=eq.${S.activePool.id}`
+    }, async () => {
+      await loadPoolData();
+      render();
+    })
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'pool_members',
+      filter: `pool_id=eq.${S.activePool.id}`
+    }, async () => {
+      await loadPoolData();
       render();
     })
     .subscribe();
@@ -1879,6 +1995,98 @@ function unsubscribeDraftRealtime() {
     sb.removeChannel(_draftChannel);
     _draftChannel = null;
   }
+  if (_poolChannel) {
+    sb.removeChannel(_poolChannel);
+    _poolChannel = null;
+  }
+}
+
+/* ===================== Pick-Timer & Auto-Pick ===================== */
+function remainingPickSeconds() {
+  const pool = S.activePool;
+  if (!pool || pool.status !== 'drafting' || !pool.current_pick_deadline) return null;
+  const ms = new Date(pool.current_pick_deadline).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 1000));
+}
+
+let _pickTimerInterval = null;
+let _autoPickInFlight = false;
+let _lastRemainingShown = -1;
+
+function ensurePickTimer() {
+  if (_pickTimerInterval) return;
+  _pickTimerInterval = setInterval(tickPickTimer, 250);
+}
+
+function stopPickTimer() {
+  if (_pickTimerInterval) { clearInterval(_pickTimerInterval); _pickTimerInterval = null; }
+}
+
+async function tickPickTimer() {
+  const pool = S.activePool;
+  if (!pool || pool.status !== 'drafting') { stopPickTimer(); return; }
+  const remaining = remainingPickSeconds();
+  if (remaining === null) return;
+
+  // Re-render nur wenn Sekunde sich ändert und draft-Tab sichtbar ist
+  if (remaining !== _lastRemainingShown && S.activeTab === 'draft') {
+    _lastRemainingShown = remaining;
+    const c = getSubContainer && getSubContainer('draft');
+    if (c) renderPoolDraft(c);
+  }
+
+  if (remaining === 0 && !_autoPickInFlight) {
+    // Drafter macht Auto-Pick sofort; alle anderen warten 2s, dann versuchen sie auch (race-safe via UNIQUE)
+    const myTurn = isMyTurn();
+    const overdueMs = Date.now() - new Date(pool.current_pick_deadline).getTime();
+    if (myTurn || overdueMs >= 2000) {
+      _autoPickInFlight = true;
+      try {
+        await performAutoPick();
+      } finally {
+        setTimeout(() => { _autoPickInFlight = false; }, 1500);
+      }
+    }
+  }
+}
+
+async function performAutoPick() {
+  const current = getCurrentDrafter();
+  if (!current || !current.member) return;
+  // Höchstgereihten ESPN-Spieler nehmen, der noch nicht gepickt ist.
+  // Vor Turnierstart: tournament_golfers als Quelle.
+  const taken = new Set(S.poolPicks.map(p => normalizeName(p.golfer_name)));
+  let pickName = null;
+  const liveEntries = Object.entries(S.liveScores || {});
+  if (liveEntries.length > 0) {
+    const sorted = liveEntries
+      .filter(([n]) => !taken.has(normalizeName(n)))
+      .sort((a, b) => (a[1].sortOrder || 999) - (b[1].sortOrder || 999));
+    pickName = sorted[0]?.[0];
+  }
+  if (!pickName && S.tournamentGolfers?.length) {
+    pickName = S.tournamentGolfers.map(g => g.name).find(n => !taken.has(normalizeName(n)));
+  }
+  if (!pickName) return;
+  const { error } = await sb.from('pool_picks').insert({
+    pool_id: S.activePool.id,
+    user_id: current.member.user_id,
+    member_id: current.member.id,
+    golfer_name: pickName,
+    draft_round: current.round,
+    draft_pick: current.pickInRound
+  });
+  if (error) {
+    // Race: ein anderer Client war schneller. Picks neu laden.
+    if (/duplicate/i.test(error.message) || error.code === '23505') {
+      const { data } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
+      S.poolPicks = data || [];
+      return;
+    }
+    console.warn('[autopick]', error);
+    return;
+  }
+  showToast('Auto-Pick: ' + pickName);
 }
 
 /* ===================== Init ===================== */
@@ -1896,6 +2104,8 @@ async function initApp() {
       await loadPoolData();
       await loadTournament();
       subscribeDraftRealtime();
+      subscribePoolRealtime();
+      if (S.activePool.status === 'drafting') ensurePickTimer();
     }
     // Setup identity from auth
     if (S.userProfile) {
@@ -1992,8 +2202,9 @@ function renderRangliste() {
   let html = meineHtml;
   html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.activePool.name)}</div>`;
 
-  if (S.activePool.status === 'draft') {
-    html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">Draft aktiv</div>`;
+  if (['draft','lobby','drafting'].includes(S.activePool.status)) {
+    const label = S.activePool.status === 'lobby' ? 'Pool in Lobby — warte auf Mitspieler' : 'Draft läuft';
+    html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">${label}</div>`;
   }
 
   // FLIP: capture old positions
@@ -2832,9 +3043,10 @@ function renderAdminTab() {
   html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
     <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px">POOL-STATUS</div>
     <div style="font-size:13px;margin-bottom:10px">Aktuell: <strong>${pool.status}</strong></div>`;
-  if (pool.status === 'draft') {
+  if (['draft','lobby','drafting'].includes(pool.status)) {
+    const maxRounds = pool.picks_per_member || 4;
     const totalPicks = S.poolPicks.length;
-    const expected = S.poolMembers.length * 5;
+    const expected = S.poolMembers.length * maxRounds;
     html += `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Picks: ${totalPicks}/${expected}</div>`;
     if (totalPicks >= expected) {
       html += `<button class="btn btn-primary btn-block" onclick="activatePool()" style="padding:10px;font-size:13px">Pool starten</button>`;
@@ -2925,9 +3137,15 @@ function renderPoolDraft(c) {
     return;
   }
 
+  // ===== Lobby-Phase =====
+  if (pool.status === 'lobby') {
+    renderPoolLobby(c, pool, isAdmin);
+    return;
+  }
+
+  const maxRounds = pool.picks_per_member || 4;
   const totalPicks = S.poolPicks.length;
   const totalMembers = S.poolMembers.length;
-  const maxRounds = 5;
   const allPicksDone = totalMembers > 0 && totalPicks >= totalMembers * maxRounds;
 
   if (totalMembers === 0) {
@@ -2942,24 +3160,30 @@ function renderPoolDraft(c) {
   if (allPicksDone) {
     html += `<div style="background:var(--green);color:#fff;padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
       <div style="font-size:18px;font-weight:600">Draft komplett!</div>
-      ${isAdmin && pool.status === 'draft' ? '<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>' : ''}
+      ${isAdmin && pool.status !== 'active' ? '<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>' : ''}
     </div>`;
   } else {
     const current = getCurrentDrafter();
     if (current && current.member) {
       const myTurn = isMyTurn();
       const mName = memberName(current.member);
+      const remaining = remainingPickSeconds();
+      const timerHtml = remaining !== null ? `
+        <div style="font-family:var(--font-display);font-size:42px;line-height:1;margin:10px 0;color:${remaining <= 10 ? 'var(--red)' : '#fff'}">${remaining}<span style="font-size:18px">s</span></div>
+      ` : '';
       if (myTurn) {
         const isPh = current.member.is_placeholder;
         html += `<div style="background:var(--green);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
           <div style="font-size:11px;letter-spacing:1px;opacity:0.85">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
           <div style="font-size:22px;font-weight:600;margin:8px 0">${isPh ? 'Pick für ' + esc(mName) : 'Du bist dran!'}</div>
+          ${timerHtml}
           <button class="btn" onclick="openPoolDraftModal()" style="background:#fff;color:var(--green);font-weight:600;padding:10px 20px">Spieler picken</button>
         </div>`;
       } else {
         html += `<div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
           <div style="font-size:11px;letter-spacing:1px;color:var(--text3)">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
-          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(mName)}</strong>...</div>
+          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(mName)}</strong>…</div>
+          ${remaining !== null ? `<div style="font-family:var(--font-display);font-size:32px;color:${remaining <= 10 ? 'var(--red)' : 'var(--text)'};margin-top:8px">${remaining}<span style="font-size:14px">s</span></div>` : ''}
         </div>`;
       }
     }
@@ -2997,6 +3221,123 @@ function renderPoolDraft(c) {
   }
 
   c.innerHTML = html;
+}
+
+function renderPoolLobby(c, pool, isAdmin) {
+  const target = pool.num_members_target || 6;
+  const members = [...S.poolMembers].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
+  const joined = members.length;
+  const slotsHtml = [];
+  for (let i = 0; i < target; i++) {
+    const m = members[i];
+    if (m) {
+      slotsHtml.push(`<div class="order-item" style="background:var(--card)">
+        <div class="order-num">${m.draft_position || (i+1)}</div>
+        <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>
+      </div>`);
+    } else {
+      slotsHtml.push(`<div class="order-item" style="opacity:0.5">
+        <div class="order-num">${i+1}</div>
+        <div class="order-name" style="color:var(--text3);font-style:italic">wartet auf Mitspieler…</div>
+        <div style="font-size:11px;color:var(--text3)">offen</div>
+      </div>`);
+    }
+  }
+
+  const inviteUrl = location.origin + location.pathname + '?pool=' + pool.invite_code;
+  let html = `
+    <div style="background:linear-gradient(135deg,var(--green) 0%,#102b4a 100%);color:#fff;padding:22px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
+      <div style="font-size:11px;letter-spacing:2px;opacity:0.8">LOBBY</div>
+      <div style="font-size:24px;font-weight:600;margin:6px 0">${esc(pool.name)}</div>
+      <div style="font-size:13px;opacity:0.85">${joined} von ${target} Mitspieler beigetreten</div>
+      <div style="font-size:12px;opacity:0.7;margin-top:6px">${pool.picks_per_member || 4} Picks · ${pool.pick_seconds || 60}s Timer · Snake Draft</div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:8px">EINLADUNGSLINK TEILEN</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="lobbyInviteUrl" type="text" readonly value="${inviteUrl}" onclick="this.select()" style="flex:1;padding:10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text)">
+        <button class="btn btn-secondary" onclick="copyInvite('${inviteUrl}')" style="padding:10px 12px;font-size:12px">Copy</button>
+      </div>
+      <button class="btn btn-secondary btn-block" onclick="shareInvite('${esc(pool.name)}','${inviteUrl}')" style="margin-top:8px;padding:10px;font-size:13px">Teilen</button>
+    </div>
+
+    <div class="section-title">Mitspieler</div>
+    ${slotsHtml.join('')}
+  `;
+
+  if (isAdmin) {
+    const canStart = joined >= 2;
+    html += `
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-secondary btn-block" onclick="shuffleDraftOrder()" ${joined < 2 ? 'disabled' : ''} style="padding:12px">🎲 Reihenfolge auslosen</button>
+        <button class="btn btn-primary btn-block" onclick="startLiveDraft()" ${!canStart ? 'disabled' : ''} style="padding:14px;font-size:15px">🏌️ Draft starten ${canStart ? '' : '(min. 2 Mitspieler)'}</button>
+      </div>
+    `;
+  } else {
+    html += `<div style="text-align:center;color:var(--text3);font-size:13px;margin-top:18px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
+      Warte bis der Admin den Draft startet…
+    </div>`;
+  }
+
+  c.innerHTML = html;
+}
+
+function copyInvite(url) {
+  navigator.clipboard?.writeText(url);
+  showToast('Link kopiert');
+}
+
+function shareInvite(name, url) {
+  if (navigator.share) {
+    navigator.share({ title: name, text: 'Join meinen Golf-Pool: ' + name, url }).catch(() => {});
+  } else {
+    copyInvite(url);
+  }
+}
+
+async function shuffleDraftOrder() {
+  if (!S.activePool) return;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  if (!isAdmin) return;
+  const members = [...S.poolMembers];
+  // Fisher-Yates
+  for (let i = members.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [members[i], members[j]] = [members[j], members[i]];
+  }
+  // Position 1..N zuweisen
+  for (let i = 0; i < members.length; i++) {
+    await sb.from('pool_members').update({ draft_position: i + 1 }).eq('id', members[i].id);
+  }
+  await loadPoolData();
+  showToast('Reihenfolge ausgelost');
+  render();
+}
+
+async function startLiveDraft() {
+  if (!S.activePool) return;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  if (!isAdmin) return;
+  if (S.poolMembers.length < 2) { showToast('Mindestens 2 Mitspieler'); return; }
+  if (!confirm('Draft jetzt starten? Sobald gestartet, läuft der ' + (S.activePool.pick_seconds || 60) + 's-Timer.')) return;
+
+  // Reihenfolge sicherstellen (falls nie ausgelost wurde)
+  const hasOrder = S.poolMembers.every(m => m.draft_position);
+  if (!hasOrder) await shuffleDraftOrder();
+
+  const deadline = new Date(Date.now() + (S.activePool.pick_seconds || 60) * 1000).toISOString();
+  const { error } = await sb.from('pools').update({
+    status: 'drafting',
+    draft_started_at: new Date().toISOString(),
+    current_pick_deadline: deadline
+  }).eq('id', S.activePool.id);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  S.activePool.status = 'drafting';
+  S.activePool.current_pick_deadline = deadline;
+  showToast('Draft gestartet!');
+  render();
 }
 
 async function activatePool() {
@@ -3079,9 +3420,25 @@ async function pickGolfer(name) {
 
   if (error) { showToast('Fehler: ' + error.message); return; }
 
-  // Reload picks and re-render
+  // Picks neu laden
   const { data } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
   S.poolPicks = data || [];
+
+  // Deadline für nächsten Pick setzen — oder Draft beenden wenn alle Picks durch
+  const maxRounds = S.activePool.picks_per_member || 4;
+  const totalNeeded = maxRounds * S.poolMembers.length;
+  if (S.poolPicks.length >= totalNeeded) {
+    await sb.from('pools').update({ status: 'active', current_pick_deadline: null }).eq('id', S.activePool.id);
+    S.activePool.status = 'active';
+    S.activePool.current_pick_deadline = null;
+    showToast('Draft komplett! Pool startet.');
+  } else if (S.activePool.status === 'drafting') {
+    const seconds = S.activePool.pick_seconds || 60;
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+    await sb.from('pools').update({ current_pick_deadline: newDeadline }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = newDeadline;
+  }
+
   closeModal('modalDraftPick');
   showToast(name + ' gedraftet!');
   render();
@@ -3131,7 +3488,7 @@ function render() {
 function updateFab() {
   const fab = document.getElementById('fab');
   if (!fab) return;
-  if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'draft' && isMyTurn()) {
+  if (S.activePool && ['draft','drafting'].includes(S.activePool.status) && S.activeTab === 'draft' && isMyTurn()) {
     fab.classList.remove('hidden');
     fab.onclick = () => openPoolDraftModal();
   } else {
@@ -3280,7 +3637,7 @@ function startLiveRefresh() {
 
   // Draft-Polling: schneller wenn im Draft-Tab
   setInterval(async () => {
-    if (S.activePool && S.activePool.status === 'draft' && S.activeTab === 'draft') {
+    if (S.activePool && ['draft','drafting'].includes(S.activePool.status) && S.activeTab === 'draft') {
       await pollPoolPicks();
     }
   }, 4000);
@@ -3449,6 +3806,14 @@ if (isRunningStandalone()) {
 (async function boot() {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
+
+  // Magic-Link Callback fängt Supabase JS automatisch ab und feuert onAuthStateChange.
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      await onAuthSuccess(session.user);
+    }
+  });
+
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     await onAuthSuccess(session.user);
