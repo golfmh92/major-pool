@@ -1013,16 +1013,51 @@ function switchAuthMode(mode) {
 }
 
 async function doPasswordLogin() {
+  console.log('[login] click → doPasswordLogin');
   const email = document.getElementById('passLoginEmail').value.trim().toLowerCase();
   const pass = document.getElementById('passLoginPassword').value;
   if (!email || !pass) { showAuthError('E-Mail und Passwort eingeben'); return; }
   document.getElementById('authError').style.display = 'none';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) { showAuthError(error.message); return; }
-  // onAuthStateChange erledigt den Rest (onAuthSuccess)
+
+  // Button-Feedback (Loading State)
+  const btn = document.querySelector('#authPass button[onclick="doPasswordLogin()"]');
+  const origText = btn?.textContent || 'Einloggen';
+  if (btn) { btn.disabled = true; btn.textContent = 'Anmelden…'; btn.style.opacity = '0.7'; }
+
+  try {
+    const { data, error } = await Promise.race([
+      sb.auth.signInWithPassword({ email, password: pass }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Verbindung dauerte zu lange')), 8000))
+    ]);
+    console.log('[login] result', { hasData: !!data?.session, error });
+    if (error) { showAuthError(error.message); return; }
+    if (data?.session?.user) {
+      // signInWithPassword hat erfolgreich Session erstellt — onAuthStateChange läuft parallel,
+      // wir rufen aber trotzdem direkt onAuthSuccess auf damit's nicht "hängt" wenn der Event verschluckt wird
+      try {
+        await Promise.race([
+          onAuthSuccess(data.session.user),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Profile-Load timeout')), 5000))
+        ]);
+      } catch (e) {
+        console.warn('[login] onAuthSuccess hung, retry', e);
+        // Fallback: direkt UI umschalten — initApp wird im Hintergrund nachladen
+        currentUser = data.session.user;
+        S.userId = data.session.user.id;
+        S.isGuest = false;
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('app').style.display = '';
+      }
+    }
+  } catch (e) {
+    showAuthError(e.message || 'Login fehlgeschlagen');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; btn.style.opacity = ''; }
+  }
 }
 
 async function doRegister() {
+  console.log('[register] click → doRegister');
   const name = document.getElementById('regName').value.trim();
   const email = document.getElementById('regEmail').value.trim().toLowerCase();
   const pass = document.getElementById('regPassword').value;
@@ -1031,24 +1066,46 @@ async function doRegister() {
   if (!pass || pass.length < 6) { showAuthError('Passwort braucht min. 6 Zeichen'); return; }
   document.getElementById('authError').style.display = 'none';
 
+  const btn = document.querySelector('#authRegister button[onclick="doRegister()"]');
+  const origText = btn?.textContent || 'Konto erstellen';
+  if (btn) { btn.disabled = true; btn.textContent = 'Lege Konto an…'; btn.style.opacity = '0.7'; }
+
   // Name für public.users-Profile in onAuthSuccess Fallback
   sessionStorage.setItem('pgaPool_pendingName', name);
 
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password: pass,
-    options: { data: { name }, emailRedirectTo: window.location.href }
-  });
-  if (error) { showAuthError(error.message); return; }
-  // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
-  // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
-  if (data.session) {
-    // direkt eingeloggt → onAuthStateChange läuft
-  } else {
-    document.getElementById('sentEmail').textContent = email;
-    document.getElementById('authPass').style.display = 'none';
-    document.getElementById('authRegister').style.display = 'none';
-    document.getElementById('authMagicSent').style.display = '';
+  try {
+    const { data, error } = await Promise.race([
+      sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: window.location.href } }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Verbindung dauerte zu lange')), 8000))
+    ]);
+    console.log('[register] result', { hasSession: !!data?.session, error });
+    if (error) { showAuthError(error.message); return; }
+    // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
+    // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
+    if (data?.session?.user) {
+      try {
+        await Promise.race([
+          onAuthSuccess(data.session.user),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Profile-Load timeout')), 5000))
+        ]);
+      } catch (e) {
+        console.warn('[register] onAuthSuccess hung, fallback', e);
+        currentUser = data.session.user;
+        S.userId = data.session.user.id;
+        S.isGuest = false;
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('app').style.display = '';
+      }
+    } else {
+      document.getElementById('sentEmail').textContent = email;
+      document.getElementById('authPass').style.display = 'none';
+      document.getElementById('authRegister').style.display = 'none';
+      document.getElementById('authMagicSent').style.display = '';
+    }
+  } catch (e) {
+    showAuthError(e.message || 'Registrierung fehlgeschlagen');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; btn.style.opacity = ''; }
   }
 }
 
