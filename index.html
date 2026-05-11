@@ -852,26 +852,12 @@ body::before{content:'';position:fixed;inset:0;background:
     <input class="input" type="text" id="poolName" placeholder="z.B. Family Pool, Office Pool, Markus & Friends" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
 
     <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Turnier</label>
-    <select id="poolTournamentId" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px"></select>
+    <select id="poolTournamentId" onchange="updateCreatePoolCapacityHint()" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px"></select>
 
     <div style="display:flex;gap:10px;margin-bottom:10px">
       <div style="flex:1">
-        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Mitspieler</label>
-        <select id="poolNumMembers" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6" selected>6</option>
-          <option value="7">7</option>
-          <option value="8">8</option>
-          <option value="10">10</option>
-          <option value="12">12</option>
-        </select>
-      </div>
-      <div style="flex:1">
         <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Picks/Spieler</label>
-        <select id="poolPicksPerMember" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
+        <select id="poolPicksPerMember" onchange="updateCreatePoolCapacityHint()" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px">
           <option value="3">3</option>
           <option value="4" selected>4</option>
           <option value="5">5</option>
@@ -887,6 +873,10 @@ body::before{content:'';position:fixed;inset:0;background:
           <option value="120">2min</option>
         </select>
       </div>
+    </div>
+
+    <div id="createPoolCapacityHint" style="font-size:11px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;line-height:1.4">
+      Die Anzahl Mitspieler ist dynamisch — neue Teilnehmer können beitreten, solange das Field reicht.
     </div>
 
     <div style="display:flex;gap:10px;margin-bottom:10px">
@@ -1201,11 +1191,31 @@ async function loadTournamentsForCreate() {
     .in('status', ['upcoming', 'in_progress'])
     .order('start_date', { ascending: true });
   if (error) { console.warn('[tournaments]', error); return; }
-  sel.innerHTML = (data || []).map(t => {
+  // Field-Größen parallel zählen, damit der Capacity-Hint direkt stimmt
+  const tournaments = data || [];
+  const counts = await Promise.all(tournaments.map(t =>
+    sb.from('tournament_golfers').select('id', { count: 'exact', head: true }).eq('tournament_id', t.id)
+      .then(r => r.count || 0).catch(() => 0)
+  ));
+  sel.innerHTML = tournaments.map((t, i) => {
     const d = new Date(t.start_date);
     const dStr = d.toLocaleDateString('de-AT', { day: '2-digit', month: 'short' });
-    return `<option value="${t.id}" data-name="${esc(t.name)}" data-par="${t.par}" data-cuttop="${t.cut_top}">${esc(t.name)} — ${dStr}</option>`;
+    return `<option value="${t.id}" data-name="${esc(t.name)}" data-par="${t.par}" data-cuttop="${t.cut_top}" data-field="${counts[i]}">${esc(t.name)} — ${dStr}</option>`;
   }).join('');
+}
+
+function updateCreatePoolCapacityHint() {
+  const hint = document.getElementById('createPoolCapacityHint');
+  if (!hint) return;
+  const sel = document.getElementById('poolTournamentId');
+  const picks = parseInt(document.getElementById('poolPicksPerMember')?.value) || 4;
+  const fieldSize = parseInt(sel?.selectedOptions?.[0]?.dataset?.field) || 0;
+  if (fieldSize <= 0) {
+    hint.innerHTML = `Die Anzahl Mitspieler ist dynamisch. Sobald das Field feststeht, wird das Maximum auf <b>floor(Field / Picks)</b> begrenzt.`;
+    return;
+  }
+  const maxMembers = Math.floor(fieldSize / picks);
+  hint.innerHTML = `Dynamische Mitspieler-Anzahl. Bei <b>${fieldSize}</b> Spielern im Field und <b>${picks}</b> Picks/Spieler sind aktuell maximal <b>${maxMembers}</b> Mitspieler möglich.`;
 }
 
 async function openCreatePoolModal() {
@@ -1214,6 +1224,7 @@ async function openCreatePoolModal() {
   // damit später bei mehreren Pools fürs gleiche Turnier eindeutig unterscheidbar.
   const nameInput = document.getElementById('poolName');
   if (nameInput) nameInput.value = '';
+  updateCreatePoolCapacityHint();
   openModal('modalCreatePool');
   setTimeout(() => nameInput?.focus(), 150);
 }
@@ -1227,7 +1238,6 @@ async function createPool() {
   const par = parseInt(sel?.selectedOptions[0]?.dataset.par) || 72;
   const cutTop = parseInt(sel?.selectedOptions[0]?.dataset.cuttop) || 50;
   const entryFee = parseFloat(document.getElementById('poolEntryFee').value) || 20;
-  const numMembers = parseInt(document.getElementById('poolNumMembers').value) || 6;
   const picksPerMember = parseInt(document.getElementById('poolPicksPerMember').value) || 4;
   const pickSeconds = parseInt(document.getElementById('poolPickSeconds').value) || 60;
 
@@ -1260,7 +1270,6 @@ async function createPool() {
     par,
     cut_top: cutTop,
     entry_fee: entryFee,
-    num_members_target: numMembers,
     picks_per_member: picksPerMember,
     pick_seconds: pickSeconds,
     status: 'lobby',
@@ -1310,13 +1319,39 @@ async function joinPoolByInvite(inviteCode) {
   const { data: pool, error } = await sb.from('pools').select('*').eq('invite_code', inviteCode).single();
   if (error || !pool) { showToast('Ungültiger Einladungslink'); return; }
 
+  // Nur in der Lobby beitreten — laufender/finished Draft ist dicht
+  if (pool.status && pool.status !== 'lobby' && pool.status !== 'draft') {
+    showToast('Pool nicht mehr offen für Beitritte');
+    S.activePool = pool;
+    return;
+  }
+
   const { data: existing } = await sb.from('pool_members')
     .select('id').eq('pool_id', pool.id).eq('user_id', S.userId).single();
   if (existing) { S.activePool = pool; return; }
 
-  const { count } = await sb.from('pool_members').select('id', { count: 'exact' }).eq('pool_id', pool.id);
+  const { count } = await sb.from('pool_members').select('id', { count: 'exact', head: true }).eq('pool_id', pool.id);
+  const memberCount = count || 0;
+
+  // Capacity-Check: max Mitspieler = floor(Field-Größe / picks_per_member)
+  const picks = pool.picks_per_member || 4;
+  let fieldSize = 0;
+  if (pool.tournament_id) {
+    const { count: fc } = await sb.from('tournament_golfers')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', pool.tournament_id);
+    fieldSize = fc || 0;
+  }
+  if (fieldSize > 0) {
+    const maxMembers = Math.floor(fieldSize / picks);
+    if (memberCount + 1 > maxMembers) {
+      showToast(`Pool voll — max. ${maxMembers} Mitspieler bei ${fieldSize} Spielern × ${picks} Picks`);
+      return;
+    }
+  }
+
   await sb.from('pool_members').insert({
-    pool_id: pool.id, user_id: S.userId, draft_position: (count || 0) + 1
+    pool_id: pool.id, user_id: S.userId, draft_position: memberCount + 1
   });
 
   S.activePool = pool;
@@ -4003,34 +4038,38 @@ function renderPoolDraft(c) {
 }
 
 function renderPoolLobby(c, pool, isAdmin) {
-  const target = pool.num_members_target || 6;
   const members = [...S.poolMembers].sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
   const joined = members.length;
-  const slotsHtml = [];
-  for (let i = 0; i < target; i++) {
-    const m = members[i];
-    if (m) {
-      slotsHtml.push(`<div class="order-item" style="background:var(--card)">
-        <div class="order-num">${m.draft_position || (i+1)}</div>
-        <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
-        <div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>
-      </div>`);
-    } else {
-      slotsHtml.push(`<div class="order-item" style="opacity:0.5">
-        <div class="order-num">${i+1}</div>
-        <div class="order-name" style="color:var(--text3);font-style:italic">wartet auf Mitspieler…</div>
-        <div style="font-size:11px;color:var(--text3)">offen</div>
-      </div>`);
-    }
+  const picks = pool.picks_per_member || 4;
+  const fieldSize = (S.tournamentGolfers || []).length;
+  const maxMembers = fieldSize > 0 ? Math.floor(fieldSize / picks) : null;
+
+  const slotsHtml = members.map(m => `<div class="order-item" style="background:var(--card)">
+    <div class="order-num">${m.draft_position || ''}</div>
+    <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+    <div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>
+  </div>`);
+
+  // Ein "offener" Platzhalter-Slot, solange noch Kapazität da ist (oder unbekannt)
+  if (maxMembers === null || joined < maxMembers) {
+    slotsHtml.push(`<div class="order-item" style="opacity:0.5">
+      <div class="order-num">+</div>
+      <div class="order-name" style="color:var(--text3);font-style:italic">offen — Link teilen, um Mitspieler einzuladen</div>
+      <div style="font-size:11px;color:var(--text3)">offen</div>
+    </div>`);
   }
+
+  const capacityLine = maxMembers !== null
+    ? `${joined} beigetreten · max. ${maxMembers} möglich (${fieldSize} Spieler / ${picks} Picks)`
+    : `${joined} beigetreten · max. wird festgelegt, sobald das Field steht`;
 
   const inviteUrl = location.origin + location.pathname + '?pool=' + pool.invite_code;
   let html = `
     <div style="background:linear-gradient(135deg,var(--green) 0%,#102b4a 100%);color:#fff;padding:22px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
       <div style="font-size:11px;letter-spacing:2px;opacity:0.8">LOBBY</div>
       <div style="font-size:24px;font-weight:600;margin:6px 0">${esc(pool.name)}</div>
-      <div style="font-size:13px;opacity:0.85">${joined} von ${target} Mitspieler beigetreten</div>
-      <div style="font-size:12px;opacity:0.7;margin-top:6px">${pool.picks_per_member || 4} Picks · ${pool.pick_seconds || 60}s Timer · Snake Draft</div>
+      <div style="font-size:13px;opacity:0.85">${capacityLine}</div>
+      <div style="font-size:12px;opacity:0.7;margin-top:6px">${picks} Picks · ${pool.pick_seconds || 60}s Timer · Snake Draft</div>
     </div>
 
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px">
@@ -4103,6 +4142,16 @@ async function startLiveDraft() {
   const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
   if (!isAdmin) return;
   if (S.poolMembers.length < 2) { showToast('Mindestens 2 Mitspieler'); return; }
+
+  // Sanity: Field muss für alle Picks reichen
+  const picks = S.activePool.picks_per_member || 4;
+  const fieldSize = (S.tournamentGolfers || []).length;
+  const needed = S.poolMembers.length * picks;
+  if (fieldSize > 0 && needed > fieldSize) {
+    showToast(`Field zu klein: ${fieldSize} Spieler reichen nicht für ${S.poolMembers.length}×${picks}=${needed} Picks`);
+    return;
+  }
+
   if (!confirm('Draft jetzt starten? Sobald gestartet, läuft der ' + (S.activePool.pick_seconds || 60) + 's-Timer.')) return;
 
   // Reihenfolge sicherstellen (falls nie ausgelost wurde)
