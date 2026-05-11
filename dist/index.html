@@ -763,6 +763,22 @@ body::before{content:'';position:fixed;inset:0;background:
   </div>
 </div>
 
+<!-- Pool-Started-Modal (poppt bei allen auf wenn Admin den Pool aktiviert) -->
+<div id="poolStartedOverlay" style="display:none;position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)">
+  <div style="width:100%;max-width:360px;background:linear-gradient(135deg,#1B3A5C 0%,#264D78 60%,#E63946 180%);color:#fff;border-radius:20px;padding:34px 24px 28px;text-align:center;box-shadow:0 20px 60px rgba(27,58,92,0.5);position:relative;overflow:hidden">
+    <div style="position:absolute;top:-30px;left:-30px;width:140px;height:140px;background:rgba(255,255,255,0.08);border-radius:50%"></div>
+    <div style="position:absolute;bottom:-40px;right:-40px;width:160px;height:160px;background:rgba(230,57,70,0.15);border-radius:50%"></div>
+    <div style="position:relative">
+      <div style="font-size:60px;line-height:1;margin-bottom:10px">🏌️‍♂️</div>
+      <div style="display:inline-block;padding:6px 14px;background:rgba(255,255,255,0.15);border-radius:20px;font-size:11px;font-weight:700;letter-spacing:2px;margin-bottom:14px">🏆 MAJOR WEEK</div>
+      <div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;line-height:1.1;margin-bottom:10px">LET'S GO!</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;opacity:0.95">Der Pool ist live 🔥</div>
+      <div style="font-size:13px;line-height:1.55;opacity:0.85;margin-bottom:22px">Ab jetzt zählt jeder Putt.<br>Möge der beste Caddy gewinnen.</div>
+      <button onclick="document.getElementById('poolStartedOverlay').style.display='none'" style="background:#fff;color:#1B3A5C;border:none;padding:14px 36px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(0,0,0,0.2)">Bring it on! 🎯</button>
+    </div>
+  </div>
+</div>
+
 <!-- Draft-Komplett-Modal (poppt beim Admin auf wenn Draft fertig) -->
 <div id="draftCompleteOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:20px">
   <div style="width:100%;max-width:360px;background:#fff;border-radius:16px;padding:28px 24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
@@ -2196,6 +2212,10 @@ function subscribePoolRealtime() {
       }
       if (payload.new.status === 'drafting') ensurePickTimer();
       else stopPickTimer();
+      // Pool jetzt aktiv → cooler Pop-Up für alle
+      if (wasStatus !== 'active' && payload.new.status === 'active') {
+        showPoolStartedModal();
+      }
       render();
     })
     .on('postgres_changes', {
@@ -3272,14 +3292,17 @@ function calcPayouts(pot, ranking) {
   // Tie-splitting: tied positions share sum of their prizes
   let i = 0;
   while (i < result.length && i < 3) {
-    let j = i;
-    while (j < result.length && result[j].total === result[i].total && result[j].total !== null) j++;
+    let j = i + 1;
+    // Tied: gleicher total, aber nur wenn total nicht null (sonst kein Vergleich)
+    if (result[i].total !== null) {
+      while (j < result.length && result[j].total === result[i].total) j++;
+    }
     const tiedCount = j - i;
     let tiedSum = 0;
     for (let k = i; k < Math.min(j, 3); k++) tiedSum += prizes[k] || 0;
-    const share = Math.round(tiedSum / tiedCount * 100) / 100;
+    const share = tiedCount > 0 ? Math.round(tiedSum / tiedCount * 100) / 100 : 0;
     for (let k = i; k < j; k++) result[k].payout = share;
-    i = j;
+    i = j;  // garantiert Fortschritt (j >= i+1)
   }
   return result;
 }
@@ -3853,6 +3876,13 @@ async function confirmActivatePool() {
   document.getElementById('draftCompleteOverlay').style.display = 'none';
   S._draftCompleteShown = true;
   await activatePool();
+  // Admin sieht das Started-Modal selbst auch (Realtime triggert nur bei anderen)
+  showPoolStartedModal();
+}
+
+function showPoolStartedModal() {
+  const ovl = document.getElementById('poolStartedOverlay');
+  if (ovl) ovl.style.display = 'flex';
 }
 
 function openPoolDraftModal() {
