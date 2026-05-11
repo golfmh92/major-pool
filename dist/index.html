@@ -385,33 +385,43 @@ body::before{content:'';position:fixed;inset:0;background:
       <div style="font-size:13px;color:var(--text2);margin-top:4px">Golf Pool mit Freunden</div>
     </div>
 
-    <!-- Mode Toggle: Magic Link vs Passwort -->
+    <!-- Mode Toggle: Anmelden vs Registrieren -->
     <div style="display:flex;background:var(--bg2);border-radius:10px;overflow:hidden;margin-bottom:20px;border:1px solid var(--border)">
-      <button id="authTabMagic" onclick="switchAuthMode('magic')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--green);color:#fff;transition:all .15s">Magic Link</button>
-      <button id="authTabPass" onclick="switchAuthMode('pass')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--text2);transition:all .15s">Passwort</button>
+      <button id="authTabLogin" onclick="switchAuthMode('login')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--green);color:#fff;transition:all .15s">Anmelden</button>
+      <button id="authTabRegister" onclick="switchAuthMode('register')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--text2);transition:all .15s">Registrieren</button>
     </div>
 
-    <!-- Magic Link Form -->
-    <div id="authMagic">
-      <input class="input" type="text" id="loginName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
-      <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
-      <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendMagicLink()" style="width:100%;padding:14px;font-size:15px">Magic Link senden</button>
-      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">Du bekommst einen Login-Link per Mail. Ein Klick — eingeloggt.</div>
-    </div>
-
-    <!-- Passwort Form -->
-    <div id="authPass" style="display:none">
+    <!-- Anmelden Form (Email + Passwort) -->
+    <div id="authPass">
       <input class="input" type="email" id="passLoginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
       <input class="input" type="password" id="passLoginPassword" placeholder="Passwort" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="current-password">
       <button class="btn btn-primary btn-block" onclick="doPasswordLogin()" style="width:100%;padding:14px;font-size:15px">Einloggen</button>
-      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">Passwort kannst du im Profil nach dem Magic-Link-Login setzen.</div>
+      <div onclick="switchAuthMode('magic')" style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer;text-decoration:underline">Passwort vergessen? Login-Link per E-Mail</div>
+    </div>
+
+    <!-- Registrieren Form (Name + Email + Passwort) -->
+    <div id="authRegister" style="display:none">
+      <input class="input" type="text" id="regName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
+      <input class="input" type="email" id="regEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
+      <input class="input" type="password" id="regPassword" placeholder="Passwort (min. 6 Zeichen)" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="new-password">
+      <button class="btn btn-primary btn-block" onclick="doRegister()" style="width:100%;padding:14px;font-size:15px">Konto erstellen</button>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px">Du bist sofort eingeloggt — kein E-Mail-Klick nötig.</div>
+    </div>
+
+    <!-- Magic Link Form (Versteckt, nur via Passwort-vergessen) -->
+    <div id="authMagic" style="display:none">
+      <div style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:14px">Wir schicken dir einen einmaligen Login-Link per Mail.</div>
+      <input class="input" type="text" id="loginName" placeholder="Dein Name (optional)" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
+      <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
+      <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendMagicLink()" style="width:100%;padding:14px;font-size:15px">Login-Link senden</button>
+      <div onclick="switchAuthMode('login')" style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">← Zurück zum normalen Login</div>
     </div>
 
     <!-- Magic Link Sent State -->
     <div id="authMagicSent" style="display:none;text-align:center;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:12px">
       <div style="font-size:36px;margin-bottom:8px">📧</div>
       <div style="font-weight:600;margin-bottom:6px">Check dein Postfach</div>
-      <div style="font-size:13px;color:var(--text2)">Wir haben dir einen Login-Link an <span id="sentEmail" style="font-weight:600;color:var(--text)"></span> geschickt. Auf dem Handy öffnen, klicken — du landest direkt im Pool.</div>
+      <div style="font-size:13px;color:var(--text2)">Wir haben dir einen Login-Link an <span id="sentEmail" style="font-weight:600;color:var(--text)"></span> geschickt. Auf dem Handy öffnen, klicken — du landest direkt drin.</div>
       <div onclick="resetAuthForm()" style="font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">Andere Adresse verwenden</div>
     </div>
 
@@ -909,7 +919,7 @@ function showAuthError(msg) {
 }
 
 function resetAuthForm() {
-  switchAuthMode('magic');
+  switchAuthMode('login');
   document.getElementById('authMagicSent').style.display = 'none';
   document.getElementById('authError').style.display = 'none';
 }
@@ -917,21 +927,29 @@ function resetAuthForm() {
 function switchAuthMode(mode) {
   const magic = document.getElementById('authMagic');
   const pass = document.getElementById('authPass');
+  const reg = document.getElementById('authRegister');
   const sent = document.getElementById('authMagicSent');
-  const tabMagic = document.getElementById('authTabMagic');
-  const tabPass = document.getElementById('authTabPass');
-  if (!magic || !pass) return;
+  const tabLogin = document.getElementById('authTabLogin');
+  const tabRegister = document.getElementById('authTabRegister');
+  if (!magic || !pass || !reg) return;
   sent.style.display = 'none';
-  if (mode === 'pass') {
-    magic.style.display = 'none';
-    pass.style.display = '';
-    tabMagic.style.background = 'transparent'; tabMagic.style.color = 'var(--text2)';
-    tabPass.style.background = 'var(--green)'; tabPass.style.color = '#fff';
-  } else {
+  magic.style.display = 'none';
+  pass.style.display = 'none';
+  reg.style.display = 'none';
+
+  if (mode === 'register') {
+    reg.style.display = '';
+    tabLogin.style.background = 'transparent'; tabLogin.style.color = 'var(--text2)';
+    tabRegister.style.background = 'var(--green)'; tabRegister.style.color = '#fff';
+  } else if (mode === 'magic') {
     magic.style.display = '';
-    pass.style.display = 'none';
-    tabMagic.style.background = 'var(--green)'; tabMagic.style.color = '#fff';
-    tabPass.style.background = 'transparent'; tabPass.style.color = 'var(--text2)';
+    tabLogin.style.background = 'var(--green)'; tabLogin.style.color = '#fff';
+    tabRegister.style.background = 'transparent'; tabRegister.style.color = 'var(--text2)';
+  } else {
+    // login (default)
+    pass.style.display = '';
+    tabLogin.style.background = 'var(--green)'; tabLogin.style.color = '#fff';
+    tabRegister.style.background = 'transparent'; tabRegister.style.color = 'var(--text2)';
   }
   document.getElementById('authError').style.display = 'none';
 }
@@ -941,9 +959,47 @@ async function doPasswordLogin() {
   const pass = document.getElementById('passLoginPassword').value;
   if (!email || !pass) { showAuthError('E-Mail und Passwort eingeben'); return; }
   document.getElementById('authError').style.display = 'none';
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) { showAuthError(error.message); return; }
   // onAuthStateChange erledigt den Rest (onAuthSuccess)
+}
+
+async function doRegister() {
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('regPassword').value;
+  if (!name) { showAuthError('Bitte Name eingeben'); return; }
+  if (!email || !email.includes('@')) { showAuthError('Bitte gültige E-Mail eingeben'); return; }
+  if (!pass || pass.length < 6) { showAuthError('Passwort braucht min. 6 Zeichen'); return; }
+  document.getElementById('authError').style.display = 'none';
+
+  // Name für public.users-Profile in onAuthSuccess Fallback
+  sessionStorage.setItem('pgaPool_pendingName', name);
+
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: pass,
+    options: { data: { name }, emailRedirectTo: window.location.href }
+  });
+  if (error) { showAuthError(error.message); return; }
+  // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
+  // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
+  if (data.session) {
+    // direkt eingeloggt → onAuthStateChange läuft
+  } else {
+    document.getElementById('sentEmail').textContent = email;
+    document.getElementById('authPass').style.display = 'none';
+    document.getElementById('authRegister').style.display = 'none';
+    document.getElementById('authMagicSent').style.display = '';
+  }
+}
+
+// Vom Leaderboard-Gast-Modus zurück zum Auth-Screen
+function showAuthScreen() {
+  S.isGuest = false;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  switchAuthMode('login');
 }
 
 async function doSendMagicLink() {
@@ -1205,7 +1261,7 @@ function updateTabs() {
     rangliste: hasPool,
     leaderboard: true,  // immer sichtbar — ESPN-Daten ohne Pool laden
     draft: inDraft,
-    profile: !isGuest
+    profile: true       // Gäste sehen hier den Anmelde-Button
   };
 
   document.querySelectorAll('.tab').forEach(el => {
@@ -1270,6 +1326,19 @@ function getSubContainer(subId) {
 function renderProfile() {
   const c = getSubContainer('profile');
   if (!c) return;
+
+  // Gast-Modus: großer Anmelde-CTA, kein Profil
+  if (S.isGuest || !S.userId) {
+    c.innerHTML = `
+      <div style="padding:40px 20px;text-align:center">
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--bg2);color:var(--green);font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;border:2px solid var(--border)">👤</div>
+        <div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin-bottom:8px">Du bist nicht angemeldet</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:24px;max-width:280px;margin-left:auto;margin-right:auto;line-height:1.5">Mit Konto kannst du Pools erstellen, Freunde einladen und am Draft teilnehmen.</div>
+        <button class="btn btn-primary" onclick="showAuthScreen()" style="padding:14px 32px;font-size:15px;font-weight:600">Anmelden / Registrieren</button>
+      </div>`;
+    return;
+  }
+
   const p = S.userProfile || { name: currentUser?.email || 'Unbekannt', email: currentUser?.email || '', avatar_initials: '?' };
 
   let html = `
