@@ -1903,6 +1903,14 @@ async function fetchLiveScores() {
       }
     }
 
+    // Track score changes für Animation
+    const oldToPar = {};
+    Object.entries(S.liveScores || {}).forEach(([n, s]) => { oldToPar[n] = s.toPar; });
+    S._changedScores = new Set();
+    Object.entries(scores).forEach(([n, s]) => {
+      if (oldToPar[n] !== undefined && oldToPar[n] !== s.toPar) S._changedScores.add(n);
+    });
+
     S.liveScores = scores;
     S.liveLastUpdate = new Date();
     const anyonePlaying = S.tournamentLive && Object.values(scores).some(s => !s.finished && s.currentRound > 0);
@@ -1923,6 +1931,15 @@ async function fetchLiveScores() {
         freezePoolScores();
       }
       render();
+      // Score-Animation: nach Re-Render Elemente der geänderten Spieler highlighten
+      if (S._changedScores && S._changedScores.size > 0) {
+        requestAnimationFrame(() => {
+          S._changedScores.forEach(name => {
+            document.querySelectorAll(`.lb-entry[data-name="${CSS.escape(name)}"] .lb-total`).forEach(el => animateScoreEl(el));
+          });
+          S._changedScores.clear();
+        });
+      }
     }
   } catch (err) {
     console.warn('Live scoring fetch failed:', err);
@@ -2354,6 +2371,19 @@ function fmtScore(val) {
   return val > 0 ? `+${val}` : `${val}`;
 }
 
+function fmtTeeTime(iso, startHole) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const hm = d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' });
+  return startHole === 10 ? `${hm} ·10` : hm;
+}
+
+function animateScoreEl(el) {
+  if (!el) return;
+  el.classList.add('score-changed');
+  el.addEventListener('animationend', () => el.classList.remove('score-changed'), { once: true });
+}
+
 function scoreClass(val) {
   if (val === null || val === undefined) return '';
   if (val < 0) return 'birdie';  // under par = red
@@ -2382,6 +2412,51 @@ function memberInitials(m) {
 }
 
 /* ===================== Render: Rangliste (Pool-Ranking) ===================== */
+function buildPodiumHtml(ranking) {
+  const active = ranking.filter(t => !t.isEliminated);
+  if (active.length === 0) return '';
+
+  // Top 3 mit Ties (Bsp.: 2 mal 1. → beide Gold)
+  const entries = [];
+  let rank = 1, i = 0;
+  while (i < active.length && rank <= 3) {
+    const total = active[i].total;
+    const tied = [];
+    for (let j = i; j < active.length && active[j].total === total; j++) tied.push(j);
+    const label = tied.length > 1 ? 'T' + rank + '.' : rank + '.';
+    for (const j of tied) {
+      entries.push({ rank, label, member: active[j], total });
+    }
+    rank += tied.length;
+    i += tied.length;
+  }
+
+  const barColors = { 1: 'p1', 2: 'p2', 3: 'p3' };
+  const placeClass = { 1: 'gold', 2: 'silver', 3: 'bronze' };
+  const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+  // Reihenfolge: 2 links, 1 mitte, 3+ rechts
+  const r1 = entries.filter(e => e.rank === 1);
+  const r2 = entries.filter(e => e.rank === 2);
+  const r3plus = entries.filter(e => e.rank >= 3);
+  const order = [...r2, ...r1, ...r3plus];
+
+  let html = '<div class="podium" style="flex-wrap:wrap">';
+  order.forEach(e => {
+    const isMe = e.member.user_id && e.member.user_id === S.userId;
+    const name = e.member.name || '?';
+    html += `<div class="podium-slot${isMe ? ' mine' : ''}">
+      <div style="font-size:28px;line-height:1;margin-bottom:4px">${medal[e.rank] || ''}</div>
+      <div class="podium-place ${placeClass[e.rank] || 'bronze'}">${e.label}</div>
+      <div class="podium-name">${esc(name)}</div>
+      <div class="podium-amount">${fmtScore(e.total)}</div>
+      <div class="podium-bar ${barColors[e.rank] || 'p3'}"></div>
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
 function renderRangliste() {
   const c = getSubContainer('rangliste');
   if (!c) return;
@@ -2417,6 +2492,11 @@ function renderRangliste() {
   if (['draft','lobby','drafting'].includes(S.activePool.status)) {
     const label = S.activePool.status === 'lobby' ? 'Pool in Lobby — warte auf Mitspieler' : 'Draft läuft';
     html += `<div style="background:var(--green-dim);color:var(--green);padding:12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;text-align:center">${label}</div>`;
+  }
+
+  // Podium wenn Pool abgeschlossen
+  if (S.activePool.status === 'finished') {
+    html += buildPodiumHtml(ranking);
   }
 
   // FLIP: capture old positions
@@ -2635,8 +2715,7 @@ function renderLeaderboardTab() {
     // Tee time for pre-round
     let teeTimeHtml = '';
     if (!isCut && data.statusState === 'pre' && data.teeTime) {
-      const t = new Date(data.teeTime);
-      teeTimeHtml = `<div style="font-size:10px;color:var(--text3)">${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}</div>`;
+      teeTimeHtml = `<div style="font-size:10px;color:var(--text3);text-align:right">${fmtTeeTime(data.teeTime, data.startHole)}</div>`;
     }
 
     return `<div class="lb-entry${isCut ? ' eliminated' : ''}${isMine ? ' mine' : ''}" data-name="${esc(name)}" style="cursor:pointer" onclick="showScorecardByName('${esc(name).replace(/'/g, "\\'")}')">
