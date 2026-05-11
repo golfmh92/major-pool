@@ -408,21 +408,27 @@ body::before{content:'';position:fixed;inset:0;background:
       <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px">Du bist sofort eingeloggt — kein E-Mail-Klick nötig.</div>
     </div>
 
-    <!-- Magic Link Form (Versteckt, nur via Passwort-vergessen) -->
+    <!-- Passwort-zurücksetzen Form (nur via "Passwort vergessen"-Link) -->
     <div id="authMagic" style="display:none">
-      <div style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:14px">Wir schicken dir einen einmaligen Login-Link per Mail.</div>
-      <input class="input" type="text" id="loginName" placeholder="Dein Name (optional)" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
+      <div style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:14px">Gib deine E-Mail ein. Wir schicken dir einen Link um ein neues Passwort zu setzen.</div>
       <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
-      <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendMagicLink()" style="width:100%;padding:14px;font-size:15px">Login-Link senden</button>
-      <div onclick="switchAuthMode('login')" style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">← Zurück zum normalen Login</div>
+      <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendPasswordReset()" style="width:100%;padding:14px;font-size:15px">Reset-Link senden</button>
+      <div onclick="switchAuthMode('login')" style="text-align:center;font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">← Zurück zum Login</div>
     </div>
 
-    <!-- Magic Link Sent State -->
+    <!-- Reset/Magic Link Sent State -->
     <div id="authMagicSent" style="display:none;text-align:center;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:12px">
       <div style="font-size:36px;margin-bottom:8px">📧</div>
       <div style="font-weight:600;margin-bottom:6px">Check dein Postfach</div>
-      <div style="font-size:13px;color:var(--text2)">Wir haben dir einen Login-Link an <span id="sentEmail" style="font-weight:600;color:var(--text)"></span> geschickt. Auf dem Handy öffnen, klicken — du landest direkt drin.</div>
+      <div style="font-size:13px;color:var(--text2)">Wir haben dir einen Link an <span id="sentEmail" style="font-weight:600;color:var(--text)"></span> geschickt. Auf dem Handy öffnen, klicken — dann kannst du ein neues Passwort setzen.</div>
       <div onclick="resetAuthForm()" style="font-size:12px;color:var(--text3);margin-top:14px;cursor:pointer">Andere Adresse verwenden</div>
+    </div>
+
+    <!-- Neues Passwort setzen (nach Klick auf Reset-Link) -->
+    <div id="authNewPassword" style="display:none">
+      <div style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:14px">Setze jetzt ein neues Passwort:</div>
+      <input class="input" type="password" id="newPwInput" placeholder="Neues Passwort (min. 6 Zeichen)" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="new-password">
+      <button class="btn btn-primary btn-block" onclick="doApplyNewPassword()" style="width:100%;padding:14px;font-size:15px">Passwort speichern</button>
     </div>
 
     <!-- Error -->
@@ -1002,37 +1008,44 @@ function showAuthScreen() {
   switchAuthMode('login');
 }
 
-async function doSendMagicLink() {
-  const name = document.getElementById('loginName').value.trim();
+async function doSendPasswordReset() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  if (!name) { showAuthError('Bitte Name eingeben'); return; }
   if (!email || !email.includes('@')) { showAuthError('Bitte gültige E-Mail eingeben'); return; }
-
-  // Name + ggf. eingeladener Pool-Code für Erstanmeldung mitsenden
-  sessionStorage.setItem('pgaPool_pendingName', name);
 
   const btn = document.getElementById('btnSendMagicLink');
   btn.disabled = true;
   btn.textContent = 'Sende…';
   document.getElementById('authError').style.display = 'none';
 
-  // Magic-Link kommt auf die aktuelle URL zurück (inkl. ?pool=CODE Query-Param)
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: window.location.href,
-      data: { name }
-    }
+  // Recovery-Link kommt auf die aktuelle URL zurück (inkl. ?pool=CODE Query-Param)
+  // Supabase fügt #access_token=...&type=recovery an → onAuthStateChange feuert PASSWORD_RECOVERY
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href
   });
 
   btn.disabled = false;
-  btn.textContent = 'Magic Link senden';
+  btn.textContent = 'Reset-Link senden';
 
   if (error) { showAuthError(error.message); return; }
 
   document.getElementById('sentEmail').textContent = email;
   document.getElementById('authMagic').style.display = 'none';
   document.getElementById('authMagicSent').style.display = '';
+}
+
+async function doApplyNewPassword() {
+  const pw = document.getElementById('newPwInput').value;
+  if (!pw || pw.length < 6) { showAuthError('Passwort braucht min. 6 Zeichen'); return; }
+  document.getElementById('authError').style.display = 'none';
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if (error) { showAuthError(error.message); return; }
+  // Passwort gesetzt → ist eingeloggt → App-View
+  document.getElementById('authNewPassword').style.display = 'none';
+  showToast('Passwort gespeichert ✓');
+  // onAuthStateChange (SIGNED_IN bei aktueller Session) hat schon onAuthSuccess getriggert
+  // App ist evtl. schon sichtbar — sonst manuelles initApp
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) { await onAuthSuccess(session.user); }
 }
 
 async function onAuthSuccess(user) {
@@ -3963,8 +3976,19 @@ if (isRunningStandalone()) {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
 
-  // Magic-Link Callback fängt Supabase JS automatisch ab und feuert onAuthStateChange.
+  // Auth-Callback (Magic Link / Recovery / Login)
   sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // User hat den "Passwort vergessen"-Link geklickt → "Neues Passwort"-Dialog zeigen
+      document.getElementById('authScreen').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('authMagic').style.display = 'none';
+      document.getElementById('authPass').style.display = 'none';
+      document.getElementById('authRegister').style.display = 'none';
+      document.getElementById('authMagicSent').style.display = 'none';
+      document.getElementById('authNewPassword').style.display = '';
+      return;
+    }
     if (event === 'SIGNED_IN' && session?.user) {
       await onAuthSuccess(session.user);
     }
