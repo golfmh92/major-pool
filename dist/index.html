@@ -763,6 +763,17 @@ body::before{content:'';position:fixed;inset:0;background:
   </div>
 </div>
 
+<!-- Draft-Komplett-Modal (poppt beim Admin auf wenn Draft fertig) -->
+<div id="draftCompleteOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:360px;background:#fff;border-radius:16px;padding:28px 24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+    <div style="font-size:56px;line-height:1;margin-bottom:10px">🏌️</div>
+    <div style="font-family:var(--font-display);font-size:24px;color:var(--green);letter-spacing:1px;margin-bottom:6px">DRAFT KOMPLETT!</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:20px">Alle Picks sind durch. Jetzt kannst du den Pool starten — ab dann zählen die Live-Scores.</div>
+    <button class="btn btn-primary btn-block" onclick="confirmActivatePool()" style="padding:14px;font-size:15px;font-weight:600">🏆 Pool starten</button>
+    <button class="btn btn-secondary btn-block" onclick="document.getElementById('draftCompleteOverlay').style.display='none';S._draftCompleteShown=true" style="padding:12px;font-size:13px;margin-top:8px">Später</button>
+  </div>
+</div>
+
 <!-- Bonus Modal -->
 <div class="modal-overlay" id="modalBonus">
   <div class="modal">
@@ -3632,6 +3643,14 @@ function renderPoolDraft(c) {
       <div style="font-size:18px;font-weight:600">Draft komplett!</div>
       ${isAdmin && pool.status !== 'active' ? '<button class="btn" onclick="activatePool()" style="margin-top:12px;background:#fff;color:var(--green);font-weight:600">Pool starten</button>' : ''}
     </div>`;
+    // Admin: Pop-Up auto-öffnen (nur 1x pro Session, S._draftCompleteShown verhindert Re-Pop bei Re-Render)
+    if (isAdmin && pool.status !== 'active' && !S._draftCompleteShown) {
+      S._draftCompleteShown = true;
+      setTimeout(() => {
+        const ovl = document.getElementById('draftCompleteOverlay');
+        if (ovl && S.activePool?.status !== 'active') ovl.style.display = 'flex';
+      }, 200);
+    }
   } else {
     const current = getCurrentDrafter();
     if (current && current.member) {
@@ -3830,6 +3849,12 @@ async function activatePool() {
   render();
 }
 
+async function confirmActivatePool() {
+  document.getElementById('draftCompleteOverlay').style.display = 'none';
+  S._draftCompleteShown = true;
+  await activatePool();
+}
+
 function openPoolDraftModal() {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
   S.draftModalOpen = true;
@@ -3930,14 +3955,14 @@ async function pickGolfer(name) {
   const { data } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
   S.poolPicks = data || [];
 
-  // Deadline für nächsten Pick setzen — oder Draft beenden wenn alle Picks durch
+  // Deadline für nächsten Pick setzen — oder Draft komplett
   const maxRounds = S.activePool.picks_per_member || 4;
   const totalNeeded = maxRounds * S.poolMembers.length;
   if (S.poolPicks.length >= totalNeeded) {
-    await sb.from('pools').update({ status: 'active', current_pick_deadline: null }).eq('id', S.activePool.id);
-    S.activePool.status = 'active';
+    // Timer stoppen aber Status bleibt 'drafting' — Admin aktiviert manuell via Modal
+    await sb.from('pools').update({ current_pick_deadline: null }).eq('id', S.activePool.id);
     S.activePool.current_pick_deadline = null;
-    showToast('Draft komplett! Pool startet.');
+    showToast('Draft komplett!');
   } else if (S.activePool.status === 'drafting') {
     const seconds = S.activePool.pick_seconds || 60;
     const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
