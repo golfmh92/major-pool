@@ -8,9 +8,12 @@
 <meta name="apple-mobile-web-app-title" content="PGA Pool">
 <meta name="theme-color" content="#1B3A5C">
 <title>PGA Pool</title>
+<!-- Favicon (inline SVG) — Navy Box mit PP Monogram + Red Accent -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231B3A5C'/%3E%3Ctext x='32' y='44' font-family='Impact,Arial Black,sans-serif' font-size='34' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-2'%3EPP%3C/text%3E%3Crect x='22' y='50' width='20' height='3' rx='1.5' fill='%23E63946'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='34' fill='%231B3A5C'/%3E%3Ctext x='90' y='105' font-family='Impact,Arial Black,sans-serif' font-size='62' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-3'%3EPGA%3C/text%3E%3Ctext x='90' y='150' font-family='Impact,Arial Black,sans-serif' font-size='38' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-2'%3EPOOL%3C/text%3E%3Crect x='40' y='28' width='100' height='4' rx='2' fill='%23E63946'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -48,10 +51,11 @@ body::before{content:'';position:fixed;inset:0;background:
 .safe-top{height:var(--safe-top);min-height:0;flex-shrink:0}
 
 /* ===== Header ===== */
-.app-header{padding:20px 20px 14px;text-align:center;flex-shrink:0;position:relative;background:linear-gradient(135deg,#1B3A5C,#0F2440);color:#fff}
+.app-header{padding:18px 20px 14px;text-align:center;flex-shrink:0;position:relative;background:linear-gradient(135deg,#1B3A5C,#0F2440);color:#fff}
 .app-header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#E63946,#FF6B6B,#E63946)}
-.header-title{font-family:var(--font-display);font-size:32px;font-weight:400;color:#fff;letter-spacing:4px;text-transform:uppercase;line-height:1.1}
-.header-sub{font-size:11px;color:rgba(255,255,255,.6);letter-spacing:5px;text-transform:uppercase;margin-top:2px;font-weight:400}
+.header-top{font-family:'Bebas Neue',Impact,sans-serif;font-size:10px;letter-spacing:5px;color:#E63946;line-height:1;margin-bottom:4px}
+.header-title{font-family:'Anton',Impact,sans-serif;font-size:30px;font-weight:400;color:#fff;letter-spacing:4px;text-transform:uppercase;line-height:1.05}
+.header-sub{font-family:'Inter',sans-serif;font-size:9px;color:rgba(255,255,255,.65);letter-spacing:4px;text-transform:uppercase;margin-top:5px;font-weight:600}
 .live-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-body);font-size:10px;font-weight:600;color:var(--gold);letter-spacing:1px;margin-top:4px;text-transform:uppercase}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse-live 1.5s ease-in-out infinite}
 @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.3}}
@@ -379,10 +383,11 @@ body::before{content:'';position:fixed;inset:0;background:
 <!-- Auth Screen -->
 <div id="authScreen" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);align-items:center;justify-content:center;padding:20px">
   <div style="width:100%;max-width:380px">
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:32px">
-      <div style="font-family:var(--font-display);font-size:28px;color:var(--green);letter-spacing:3px">PGA POOL</div>
-      <div style="font-size:13px;color:var(--text2);margin-top:4px">Golf Pool mit Freunden</div>
+    <!-- Header / Logo -->
+    <div style="text-align:center;margin-bottom:32px;line-height:1">
+      <div style="font-family:var(--font-display);font-size:13px;letter-spacing:6px;color:var(--red);margin-bottom:6px">★ MAJOR SEASON ★</div>
+      <div style="font-family:'Anton',Impact,sans-serif;font-size:42px;letter-spacing:4px;color:var(--green)">PGA POOL</div>
+      <div style="font-family:'Inter',sans-serif;font-size:10px;letter-spacing:4px;color:var(--text2);font-weight:600;margin-top:6px">DRAFT · WATCH · WIN</div>
     </div>
 
     <!-- Mode Toggle: Anmelden vs Registrieren -->
@@ -447,8 +452,9 @@ body::before{content:'';position:fixed;inset:0;background:
     <div class="header-avatar" id="avatarBtn" style="display:none">
       <span id="avatarText">?</span>
     </div>
+    <div class="header-top">★ MAJOR SEASON ★</div>
     <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">PGA POOL</div>
-    <div class="header-sub" id="headerSub">PGA Championship · 14.–17. Mai</div>
+    <div class="header-sub" id="headerSub">DRAFT · WATCH · WIN</div>
     <div class="live-badge stale" id="liveBadge" style="display:none"><div class="live-dot"></div><span id="liveText">Live</span></div>
     <button class="header-admin" id="btnPush" style="right:16px;display:none" onclick="togglePushDropdown()">
       <svg viewBox="0 0 24 24" id="pushIcon"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
