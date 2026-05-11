@@ -2071,7 +2071,6 @@ async function fetchLiveScores() {
 
 async function freezePoolScores() {
   if (!S.activePool) return;
-  const poolPar = S.activePool.par || PAR;
   const pid = S.activePool.id;
   const upserts = [];
   for (const p of S.poolPicks) {
@@ -2082,16 +2081,17 @@ async function freezePoolScores() {
       if (!sc) continue;
       const existing = S.poolScores.find(s => s.pool_id === pid && s.golfer_name === p.golfer_name && s.round === r && s.score > 0);
       if (existing) continue;
-      upserts.push({ pool_id: pid, golfer_name: p.golfer_name, round: r, score: sc, user_id: 'auto-freeze' });
+      upserts.push({ pool_id: pid, golfer_name: p.golfer_name, round: r, score: sc });
     }
   }
   if (upserts.length > 0) {
-    await sb.from('pool_scores').insert(upserts);
+    const { error } = await sb.from('pool_scores').upsert(upserts, { onConflict: 'pool_id,golfer_name,round' });
+    if (error) { console.warn('[freeze] error:', error); showToast('Freeze fehlgeschlagen: ' + error.message); return; }
   }
   localStorage.setItem('pga_frozen_' + pid, '1');
   await loadPoolData();
   render();
-  console.log('Pool scores frozen:', upserts.length, 'scores saved');
+  console.log('[freeze] Pool scores frozen:', upserts.length, 'scores saved');
 }
 
 function refreshOpenScorecard() {
