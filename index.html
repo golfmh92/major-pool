@@ -929,6 +929,7 @@ let S = {
   _adminTab: 'draft',
   lbRound: 0,
   lbFilter: '',
+  golferFilter: '',
   myName: '',
   // Live scoring (ESPN)
   liveScores: {},
@@ -2839,14 +2840,25 @@ function renderLeaderboardTab() {
 
     if (field.length > 0) {
       const favSet = new Set(S.favorites || []);
-      // Favoriten zuerst, dann Rest (alphabetisch wie aus DB)
-      const favList = field.filter(g => favSet.has(g.name));
-      const restList = field.filter(g => !favSet.has(g.name));
+      const q = (S.golferFilter || '').trim().toLowerCase();
+      const filteredField = q ? field.filter(g => normalizeName(g.name).includes(normalizeName(q))) : field;
+      // Favoriten oben extra anzeigen + zusätzlich an ihrer Position im kompletten Field
+      const favList = filteredField.filter(g => favSet.has(g.name));
+      const restList = filteredField;  // alle Spieler inkl. Favoriten
       html += `
         <div style="padding:18px 16px 4px">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text2);margin-bottom:4px">FIELD · ${field.length} SPIELER</div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text2);margin-bottom:8px">FIELD · ${field.length} SPIELER</div>
+          <div style="position:relative;margin-bottom:8px">
+            <input id="golferFilterInputPre" type="text" placeholder="Spieler suchen…" value="${esc(S.golferFilter || '')}" oninput="S.golferFilter=this.value;render();setTimeout(()=>{const el=document.getElementById('golferFilterInputPre');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},10);" style="width:100%;padding:9px 32px 9px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)">
+            ${q ? `<button onclick="S.golferFilter='';render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg2);border:none;width:22px;height:22px;border-radius:50%;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center">×</button>` : ''}
+          </div>
           <div style="font-size:11px;color:var(--text3)">Tap auf ⭐ um Spieler zu favorisieren — werden ab Turnierstart oben angezeigt</div>
         </div>`;
+      if (filteredField.length === 0) {
+        html += '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">Niemand gefunden</div>';
+        c.innerHTML = html;
+        return;
+      }
 
       function renderFieldRow(g, idx) {
         const isFav = favSet.has(g.name);
@@ -2929,14 +2941,25 @@ function renderLeaderboardTab() {
     });
   }
 
+  // Suchfilter
+  const golferQ = (S.golferFilter || '').trim().toLowerCase();
+  const filteredEntries = golferQ
+    ? entries.filter(([name]) => normalizeName(name).includes(normalizeName(golferQ)))
+    : entries;
+
   // Favoriten zusätzlich oben anzeigen — die normale Liste (otherEntries) bleibt
   // komplett (Favoriten doppelt: oben + an ihrer normalen Position).
   const favSet = new Set(S.favorites || []);
-  const favEntries = entries.filter(([name]) => favSet.has(name));
-  const otherEntries = entries;
+  const favEntries = filteredEntries.filter(([name]) => favSet.has(name));
+  const otherEntries = filteredEntries;
 
   let html = meineHtml;
   html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.liveEventName)}</div>`;
+  // Suchfeld
+  html += `<div style="position:relative;margin-bottom:10px">
+    <input id="golferFilterInputLive" type="text" placeholder="Spieler suchen…" value="${esc(S.golferFilter || '')}" oninput="S.golferFilter=this.value;render();setTimeout(()=>{const el=document.getElementById('golferFilterInputLive');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},10);" style="width:100%;padding:9px 32px 9px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)">
+    ${golferQ ? `<button onclick="S.golferFilter='';render()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg2);border:none;width:22px;height:22px;border-radius:50%;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center">×</button>` : ''}
+  </div>`;
   html += roundTabsHtml;
 
   // Render entries
