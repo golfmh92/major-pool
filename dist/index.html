@@ -1017,19 +1017,34 @@ const SB_URL = 'https://sagxezwnwsukmgqfjlci.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94';
 
 async function directLogin(email, password) {
+  console.log('[directLogin] fetch start');
   const resp = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
     method: 'POST',
     headers: { 'apikey': SB_ANON, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
+  console.log('[directLogin] fetch done, status', resp.status);
   const body = await resp.json();
   if (!resp.ok) {
     const msg = body.error_description || body.msg || body.message || 'Login fehlgeschlagen';
     return { error: { message: msg } };
   }
-  // Session manuell in Supabase-Client laden
-  await sb.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
-  return { data: { session: body, user: body.user } };
+  // Session direkt in localStorage schreiben (supabase-js Format) — KEIN sb.auth.setSession (hängt!)
+  const sessionData = {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + (body.expires_in || 3600),
+    expires_in: body.expires_in || 3600,
+    token_type: body.token_type || 'bearer',
+    user: body.user
+  };
+  try {
+    localStorage.setItem('sb-sagxezwnwsukmgqfjlci-auth-token', JSON.stringify(sessionData));
+  } catch (e) { console.warn('[directLogin] localStorage failed', e); }
+  // setSession parallel im Hintergrund versuchen — falls hängt, egal
+  sb.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token })
+    .catch(e => console.warn('[directLogin] setSession bg failed', e));
+  return { data: { session: sessionData, user: body.user } };
 }
 
 async function doPasswordLogin() {
