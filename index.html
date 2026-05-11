@@ -917,6 +917,7 @@ let S = {
   activeTab: 'leaderboard',
   _adminTab: 'draft',
   lbRound: 0,
+  lbFilter: '',
   myName: '',
   // Live scoring (ESPN)
   liveScores: {},
@@ -2507,6 +2508,14 @@ function buildPodiumHtml(ranking) {
   return html;
 }
 
+function setLbRound(r) { S.lbRound = r; renderRangliste(); }
+function clearLbFilter() {
+  S.lbFilter = '';
+  const inp = document.getElementById('lbFilterInput');
+  if (inp) inp.value = '';
+  renderRangliste();
+}
+
 function renderRangliste() {
   const c = getSubContainer('rangliste');
   if (!c) return;
@@ -2514,27 +2523,59 @@ function renderRangliste() {
 
   // Meine Golfer Strip
   const meineHtml = renderMeineGolfer();
-
-  const ranking = getPoolRanking();
   const poolPar = S.activePool.par || PAR;
+  let ranking = getPoolRanking();
 
   if (ranking.length === 0) {
     c.innerHTML = meineHtml + '<div class="empty">Noch keine Mitspieler im Pool</div>';
     return;
   }
 
+  const rd = S.lbRound || 0;  // 0=Gesamt, 1-4 = Runde
+
+  // Sort by selected round if not Gesamt
+  if (rd > 0) {
+    ranking.sort((a, b) => {
+      const aElim = a.isEliminated ? 1 : 0;
+      const bElim = b.isEliminated ? 1 : 0;
+      if (aElim !== bElim) return aElim - bElim;
+      const aS = a.rounds[rd - 1];
+      const bS = b.rounds[rd - 1];
+      if (aS === null && bS === null) return 0;
+      if (aS === null) return 1;
+      if (bS === null) return -1;
+      return aS - bS;
+    });
+  }
+
+  // Filter (Name oder Golfer-Name)
+  const filterVal = (S.lbFilter || '').trim().toLowerCase();
+  const filtered = filterVal ? ranking.filter(t => {
+    if (normalizeName(t.name).includes(normalizeName(filterVal))) return true;
+    const picks = S.poolPicks.filter(p => p.member_id === t.member_id);
+    return picks.some(p => normalizeName(p.golfer_name).includes(normalizeName(filterVal)));
+  }) : ranking;
+
   // Compute ranks with ties
   let rank = 0, prevTotal = null;
-  ranking.forEach((t, i) => {
+  filtered.forEach((t, i) => {
     if (!t.isEliminated) {
-      if (t.total !== prevTotal) rank = i + 1;
-      prevTotal = t.total;
+      const cmpScore = rd === 0 ? t.total : t.rounds[rd - 1];
+      const prevCmp = prevTotal;
+      if (cmpScore !== prevCmp) rank = i + 1;
+      prevTotal = cmpScore;
     }
     t._rank = t.isEliminated ? 0 : rank;
   });
   const rankCounts = {};
-  ranking.forEach(t => { if (t._rank > 0) rankCounts[t._rank] = (rankCounts[t._rank] || 0) + 1; });
-  ranking.forEach(t => { t._tied = rankCounts[t._rank] > 1; });
+  filtered.forEach(t => { if (t._rank > 0) rankCounts[t._rank] = (rankCounts[t._rank] || 0) + 1; });
+  filtered.forEach(t => { t._tied = rankCounts[t._rank] > 1; });
+  // Show rank only at first occurrence
+  const shownRanks = new Set();
+  filtered.forEach(t => {
+    t._showRank = t._rank > 0 && !shownRanks.has(t._rank);
+    if (t._rank > 0) shownRanks.add(t._rank);
+  });
 
   let html = meineHtml;
   html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.activePool.name)}</div>`;
@@ -2549,45 +2590,117 @@ function renderRangliste() {
     html += buildPodiumHtml(ranking);
   }
 
+  // Filter + Round Tabs
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <div style="position:relative;flex:1">
+      <input id="lbFilterInput" type="text" placeholder="Spieler/Golfer suchen…" value="${esc(S.lbFilter || '')}" oninput="S.lbFilter=this.value;renderRangliste();document.getElementById('lbFilterInput').focus();" style="width:100%;padding:8px 32px 8px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)">
+      ${S.lbFilter ? `<button onclick="clearLbFilter()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg2);border:none;width:22px;height:22px;border-radius:50%;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center">×</button>` : ''}
+    </div>
+  </div>`;
+
+  const days = ['Gesamt', 'Do', 'Fr', 'Sa', 'So'];
+  html += `<div class="round-tabs" style="margin-bottom:12px">${days.map((d, i) =>
+    `<button class="round-tab${rd === i ? ' active' : ''}" onclick="setLbRound(${i})">${d}</button>`
+  ).join('')}</div>`;
+
   // FLIP: capture old positions
   const oldPositions = {};
   c.querySelectorAll('.lb-entry[data-id]').forEach(el => {
     oldPositions[el.dataset.id] = el.getBoundingClientRect().top;
   });
 
-  ranking.forEach((t, i) => {
+  if (filtered.length === 0) {
+    html += '<div class="empty" style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Niemand gefunden</div>';
+    c.innerHTML = html;
+    return;
+  }
+
+  // Trophy-Icon für Platz 1 (kein Tie)
+  const trophyIcon = '🏆';
+
+  filtered.forEach((t, i) => {
     const isMe = t.user_id && t.user_id === S.userId;
     const eliminated = t.isEliminated;
-    const rankDisplay = eliminated ? '&times;' : (t._tied ? 'T' + t._rank : t._rank);
-    const totalCls = t.total !== null ? (t.total < 0 ? 'under' : t.total > 0 ? 'over' : 'even') : '';
+    const rankDisplay = eliminated ? '&times;' :
+      (!t._showRank ? '' :
+        (t._rank === 1 && !t._tied ? `<span style="font-size:20px">${trophyIcon}</span>` :
+          (t._tied ? 'T' + t._rank : t._rank)));
 
-    // Golfer chips
+    // Score: bei rd>0 die Runden-Punktzahl, sonst total
+    const displayScore = rd === 0 ? t.total : t.rounds[rd - 1];
+    const totalCls = displayScore !== null ? (displayScore < 0 ? 'under' : displayScore > 0 ? 'over' : 'even') : '';
+
+    // Picks für dieses Team
     const picks = S.poolPicks.filter(p => p.member_id === t.member_id);
-    const chipsHtml = picks.map(p => {
+
+    // Summary unter Name
+    let summary;
+    if (rd === 0) {
+      summary = t.rounds.map((r, ri) => `<span style="margin-right:8px">R${ri+1}: ${fmtScore(r)}</span>`).join('');
+    } else {
+      summary = `<span>${picks.length} Picks</span>`;
+    }
+
+    // Expand: Tabelle mit Golfern + R1-R4 Scores
+    const rdHeaders = '<div style="display:grid;grid-template-columns:1fr 30px 30px 30px 30px 40px;gap:4px;padding:4px 8px;font-size:10px;color:var(--text3);font-weight:600">' +
+      '<span>SPIELER</span><span style="text-align:center">R1</span><span style="text-align:center">R2</span><span style="text-align:center">R3</span><span style="text-align:center">R4</span><span style="text-align:center">Σ</span></div>';
+
+    const sortedPicks = [...picks].sort((a, b) => {
+      const aL = matchGolferToLive(a.golfer_name);
+      const bL = matchGolferToLive(b.golfer_name);
+      const aOut = isPoolGolferOut(a.golfer_name) ? 1 : 0;
+      const bOut = isPoolGolferOut(b.golfer_name) ? 1 : 0;
+      if (aOut !== bOut) return aOut - bOut;
+      const aTP = aL?.toPar ?? 999;
+      const bTP = bL?.toPar ?? 999;
+      return aTP - bTP;
+    });
+
+    const golferRows = sortedPicks.map(p => {
       const live = matchGolferToLive(p.golfer_name);
+      const status = getPoolGolferStatus(p.golfer_name);
       const isOut = isPoolGolferOut(p.golfer_name);
-      // Determine if counting
-      const cls = isOut ? 'cut' : '';
-      return `<span class="lb-golfer-chip ${cls}" style="cursor:pointer" onclick="event.stopPropagation();showScorecardByName('${esc(p.golfer_name).replace(/'/g, "\\'")}')">${esc(shortName(p.golfer_name))} ${live ? fmtScore(live.toPar) : ''}</span>`;
+      const cells = [1,2,3,4].map(r => {
+        const sc = live ? live['r' + r] : null;
+        const rel = sc ? sc - poolPar : null;
+        const sCls = rel === null ? '' : (rel < 0 ? 'birdie' : rel === 0 ? 'even' : rel === 1 ? 'bogey' : 'dbl');
+        // Mid-round: zeige toPar + thru
+        if (live && live.currentRound === r && !live.finished) {
+          const rtp = live['r' + r + '_toPar'] !== undefined ? live['r' + r + '_toPar'] : live.toPar;
+          return `<div style="text-align:center;font-size:11px;color:var(--green);font-weight:600;line-height:1.1">${fmtScore(rtp)}<div style="font-size:8px;color:var(--text3);font-weight:400">${live.thru || ''}</div></div>`;
+        }
+        // Pre-round: Tee-Time
+        if (live && live.statusState === 'pre' && live.nextRound === r && live.roundTeeTimes && live.roundTeeTimes[r - 1]) {
+          return `<div style="text-align:center;font-size:9px;color:var(--text3);line-height:1.1">${fmtTeeTime(live.roundTeeTimes[r - 1], live.startHole)}</div>`;
+        }
+        return `<div class="${sCls}" style="text-align:center;font-size:12px;font-weight:600">${sc !== null && sc !== undefined ? sc : '—'}</div>`;
+      }).join('');
+      const totalToPar = live?.toPar !== undefined ? fmtScore(live.toPar) : '—';
+      const totalCls2 = live?.toPar < 0 ? 'under' : live?.toPar > 0 ? 'over' : 'even';
+      const cutBadge = status === 'cut' ? ' <span style="font-size:9px;color:var(--red);font-weight:600">CUT</span>'
+        : status === 'wd' ? ' <span style="font-size:9px;color:var(--red);font-weight:600">WD</span>'
+        : status === 'dq' ? ' <span style="font-size:9px;color:var(--red);font-weight:600">DQ</span>' : '';
+      return `<div onclick="event.stopPropagation();showScorecardByName('${esc(p.golfer_name).replace(/'/g, "\\'")}')" style="display:grid;grid-template-columns:1fr 30px 30px 30px 30px 40px;gap:4px;padding:6px 8px;border-top:1px solid var(--border);align-items:center;cursor:pointer;${isOut ? 'opacity:0.55' : ''}">
+        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(shortName(p.golfer_name))}${cutBadge}</div>
+        ${cells}
+        <div class="${totalCls2}" style="text-align:center;font-size:12px;font-weight:700">${totalToPar}</div>
+      </div>`;
     }).join('');
 
-    // Round scores
-    const roundsHtml = t.rounds.map((r, ri) => `<span style="font-size:11px;padding:1px 5px;border-radius:4px;background:var(--bg2)">${fmtScore(r)}</span>`).join(' ');
-
-    html += `<div class="lb-entry${eliminated ? ' eliminated' : ''}${isMe ? ' mine' : ''}${t._rank === 1 && !eliminated ? ' rank-1' : ''}" data-id="${t.member_id}" onclick="this.classList.toggle('open')" style="cursor:pointer;flex-wrap:wrap">
+    html += `<div class="lb-entry${eliminated ? ' eliminated' : ''}${isMe ? ' mine' : ''}${t._rank === 1 && !eliminated && !t._tied ? ' rank-1' : ''}" data-id="${t.member_id}" onclick="this.classList.toggle('open')" style="cursor:pointer;flex-wrap:wrap">
       <div class="lb-rank">${rankDisplay}</div>
       <div style="width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
       <div class="lb-info" style="flex:1;min-width:0">
         <div class="lb-name">${esc(t.name)}${eliminated ? '<span class="eliminated-badge">ELIMINATED</span>' : ''}</div>
-        <div class="lb-detail">${roundsHtml}</div>
+        <div class="lb-detail" style="font-size:11px;color:var(--text3)">${summary}</div>
       </div>
       <div class="lb-score">
-        <div class="lb-total ${totalCls}">${fmtScore(t.total)}</div>
+        <div class="lb-total ${totalCls}">${fmtScore(displayScore)}</div>
         ${t.bonus > 0 ? `<div class="lb-bonus">Bonus: -${t.bonus}</div>` : ''}
       </div>
       <div class="lb-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div>
-      <div class="lb-expand" style="width:100%"><div class="lb-expand-inner">
-        <div class="lb-golfers" style="margin-bottom:0">${chipsHtml}</div>
+      <div class="lb-expand" style="width:100%"><div class="lb-expand-inner" style="padding:8px 0">
+        ${picks.length > 0 ? rdHeaders + golferRows : '<div style="padding:8px;color:var(--text3);font-size:11px;text-align:center">Keine Picks</div>'}
       </div></div>
     </div>`;
   });
