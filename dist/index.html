@@ -953,11 +953,27 @@ let S = {
 let currentUser = null;
 
 function showAuthError(msg) {
+  // Deutsche Übersetzung gängiger Supabase-Fehler
+  const translations = {
+    'Invalid login credentials': 'E-Mail oder Passwort falsch',
+    'Email not confirmed': 'E-Mail noch nicht bestätigt — check dein Postfach',
+    'User already registered': 'Konto existiert schon — bitte über "Anmelden"',
+    'Password should be at least 6 characters': 'Passwort braucht min. 6 Zeichen',
+    'Unable to validate email address: invalid format': 'E-Mail-Adresse ist ungültig',
+    'Email rate limit exceeded': 'Zu viele Versuche — bitte ein paar Minuten warten',
+  };
+  const friendly = translations[msg] || msg;
   const el = document.getElementById('authError');
-  el.textContent = msg;
+  el.innerHTML = '⚠️ <strong>' + friendly + '</strong>';
   el.style.display = '';
-  el.style.background = 'var(--red-bg)';
-  el.style.color = 'var(--red)';
+  el.style.background = 'rgba(230,57,70,0.12)';
+  el.style.color = '#E63946';
+  el.style.padding = '14px 16px';
+  el.style.borderRadius = '10px';
+  el.style.fontSize = '14px';
+  el.style.border = '1px solid rgba(230,57,70,0.3)';
+  // In Sicht scrollen falls user runter ist
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function resetAuthForm() {
@@ -4173,14 +4189,14 @@ window.addEventListener('unhandledrejection', (e) => {
   try {
     const { data: { session }, error: sessionErr } = await Promise.race([
       sb.auth.getSession(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('getSession timeout')), 5000))
+      new Promise((_, rej) => setTimeout(() => rej(new Error('getSession timeout')), 1500))
     ]);
     if (sessionErr) console.warn('[boot] session error', sessionErr);
     if (session?.user) {
       try {
         await Promise.race([
           onAuthSuccess(session.user),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('onAuthSuccess timeout')), 5000))
+          new Promise((_, rej) => setTimeout(() => rej(new Error('onAuthSuccess timeout')), 4000))
         ]);
       } catch (e) {
         console.warn('[boot] onAuthSuccess failed, showing auth screen', e);
@@ -4190,7 +4206,9 @@ window.addEventListener('unhandledrejection', (e) => {
       document.getElementById('authScreen').style.display = 'flex';
     }
   } catch (e) {
-    console.warn('[boot] session check failed', e);
+    // getSession hat getimeoutet — Session-Token vermutlich korrupt → localStorage clearen
+    console.warn('[boot] session check failed, clearing localStorage', e);
+    try { localStorage.removeItem('sb-sagxezwnwsukmgqfjlci-auth-token'); } catch(err) {}
     document.getElementById('authScreen').style.display = 'flex';
   }
   clearTimeout(watchdog);
