@@ -3357,6 +3357,46 @@ function renderAdminTab() {
   }
   html += `</div>`;
 
+  // Bonus-Vergabe (nur sinnvoll wenn Pool aktiv oder finished)
+  if (['active','finished','draft','drafting'].includes(pool.status) && S.poolPicks.length > 0) {
+    // Liste aller einzigartigen gepickten Golfer pro Member gruppieren
+    let optHtml = '';
+    const memberMap = new Map();
+    S.poolMembers.forEach(m => memberMap.set(m.id, m));
+    const groups = {};
+    S.poolPicks.forEach(p => {
+      const m = memberMap.get(p.member_id);
+      const k = m ? memberName(m) : '?';
+      (groups[k] = groups[k] || []).push(p.golfer_name);
+    });
+    for (const k of Object.keys(groups).sort()) {
+      optHtml += `<optgroup label="${esc(k)}">`;
+      groups[k].forEach(g => { optHtml += `<option value="${esc(g)}">${esc(g)}</option>`; });
+      optHtml += '</optgroup>';
+    }
+
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:10px">BONUS VERGEBEN</div>
+      <select id="selectBonusGolfer" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:8px">${optHtml}</select>
+      <select id="selectBonusType" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px">
+        <option value="par3_win">Par 3 Contest Gewinner (-2)</option>
+        <option value="hio">Hole-in-One (-1)</option>
+      </select>
+      <button class="btn btn-primary btn-block" onclick="addPoolBonus()" style="padding:10px;font-size:13px">Bonus hinzufügen</button>`;
+
+    if (S.poolBonuses && S.poolBonuses.length > 0) {
+      html += '<div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin:14px 0 6px">VERGEBENE BONI</div>';
+      S.poolBonuses.forEach(b => {
+        const label = b.bonus_type === 'par3_win' ? 'Par 3 Gewinner (-2)' : 'HIO (-1)';
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg2);border-radius:8px;margin-bottom:4px">
+          <div style="font-size:12px"><strong>${esc(b.golfer_name)}</strong> <span style="color:var(--text3);font-size:11px">${label}</span></div>
+          <button onclick="removePoolBonus('${b.id}')" style="background:var(--red);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">×</button>
+        </div>`;
+      });
+    }
+    html += '</div>';
+  }
+
   // Danger Zone
   html += `<div style="background:var(--card);border:1px solid var(--red);border-radius:var(--radius);padding:16px;margin-bottom:12px">
     <div style="font-size:11px;font-weight:600;color:var(--red);letter-spacing:0.5px;margin-bottom:8px">GEFAHRENZONE</div>
@@ -3365,6 +3405,37 @@ function renderAdminTab() {
   </div>`;
 
   c.innerHTML = html;
+}
+
+async function addPoolBonus() {
+  if (!S.activePool) return;
+  const golferName = document.getElementById('selectBonusGolfer').value;
+  const type = document.getElementById('selectBonusType').value;
+  const shots = type === 'par3_win' ? 2 : 1;
+  // Member finden, dem dieser Golfer gehört
+  const pick = S.poolPicks.find(p => p.golfer_name === golferName);
+  const memberId = pick?.member_id;
+  const member = memberId ? S.poolMembers.find(m => m.id === memberId) : null;
+  const userId = member?.user_id || null;
+  const { error } = await sb.from('pool_bonuses').insert({
+    pool_id: S.activePool.id,
+    user_id: userId,
+    golfer_name: golferName,
+    bonus_type: type,
+    shots
+  });
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  await loadPoolData();
+  showToast('Bonus für ' + golferName + ' hinzugefügt');
+  render();
+}
+
+async function removePoolBonus(id) {
+  const { error } = await sb.from('pool_bonuses').delete().eq('id', id);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  await loadPoolData();
+  showToast('Bonus entfernt');
+  render();
 }
 
 async function deletePool() {
