@@ -1064,27 +1064,41 @@ async function onAuthSuccess(user) {
   currentUser = user;
   S.userId = user.id;
   S.isGuest = false;
-  // Load user profile
-  let { data: profile, error: profErr } = await sb.from('users').select('*').eq('id', user.id).maybeSingle();
-  if (profErr) console.warn('[auth] profile load error', profErr);
-  // Falls users-Zeile fehlt (Erstanmeldung via Magic Link), automatisch anlegen
-  if (!profile) {
-    const pendingName = sessionStorage.getItem('pgaPool_pendingName');
-    const fallbackName = pendingName || user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
-    const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    const { data: inserted, error: insErr } = await sb.from('users')
-      .insert({ id: user.id, name: fallbackName, email: user.email, avatar_initials: initials })
-      .select().single();
-    if (insErr) console.warn('[auth] auto-create users row failed', insErr);
-    profile = inserted;
-    sessionStorage.removeItem('pgaPool_pendingName');
-  }
-  S.userProfile = profile;
-  S.userId = user.id;
   S.isAdmin = false;
+
+  // SOFORT App visible machen — auch wenn Profile-Load hängt
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('app').style.display = '';
-  await initApp();
+
+  // Fallback-Profile aus user-Metadaten falls DB hängt
+  S.userProfile = {
+    id: user.id,
+    name: user.user_metadata?.name || (user.email || '').split('@')[0] || 'User',
+    email: user.email,
+    avatar_initials: ((user.user_metadata?.name || user.email || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2))
+  };
+
+  // Profile-Load + initApp im Hintergrund (mit Timeout damit's nie ewig blockiert)
+  Promise.race([
+    (async () => {
+      const { data: profile } = await sb.from('users').select('*').eq('id', user.id).maybeSingle();
+      if (profile) S.userProfile = profile;
+      else {
+        // Profile fehlt → automatisch anlegen
+        const pendingName = localStorage.getItem('pgaPool_pendingName') || sessionStorage.getItem('pgaPool_pendingName');
+        const fallbackName = pendingName || user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
+        const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        const { data: inserted } = await sb.from('users').insert({
+          id: user.id, name: fallbackName, email: user.email, avatar_initials: initials
+        }).select().single();
+        if (inserted) S.userProfile = inserted;
+        localStorage.removeItem('pgaPool_pendingName');
+        sessionStorage.removeItem('pgaPool_pendingName');
+      }
+      await initApp();
+    })(),
+    new Promise(resolve => setTimeout(() => { console.warn('[auth] init timeout, app läuft mit Fallback-Profile'); resolve(); }, 5000))
+  ]).then(() => render());
 }
 
 function skipAuth() {
@@ -4148,7 +4162,12 @@ function isRunningStandalone() {
 }
 
 function hasSeenPWAPrompt() {
-  return localStorage.getItem('pga_pwa_prompt_shown') === '1';
+  // Permanent geschlossen via "Verstanden"
+  if (localStorage.getItem('pga_pwa_prompt_shown') === '1') return true;
+  // "Später" → 24h Cooldown via Timestamp
+  const snoozedAt = parseInt(localStorage.getItem('pga_pwa_snoozed_at') || '0');
+  if (snoozedAt && (Date.now() - snoozedAt < 24 * 60 * 60 * 1000)) return true;
+  return false;
 }
 
 function hasSeenTutorial() {
@@ -4170,7 +4189,12 @@ function showPWAPrompt() {
 }
 
 function closePWAPrompt(permanent) {
-  if (permanent) localStorage.setItem('pga_pwa_prompt_shown', '1');
+  if (permanent) {
+    localStorage.setItem('pga_pwa_prompt_shown', '1');
+  } else {
+    // "Später" → 24h Cooldown, danach erneut anzeigen
+    localStorage.setItem('pga_pwa_snoozed_at', String(Date.now()));
+  }
   const modal = document.getElementById('pwa-prompt-modal');
   if (modal) modal.style.display = 'none';
   // After PWA prompt dismiss, show tutorial if not seen
