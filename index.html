@@ -747,8 +747,19 @@ body::before{content:'';position:fixed;inset:0;background:
       <div id="golferList" style="max-height:280px;overflow-y:auto;margin-top:8px;border-radius:var(--radius-sm);border:1px solid var(--border)"></div>
     </div>
     <div class="actions">
-      <button class="btn btn-secondary" onclick="closeModal('modalDraftPick')">Abbrechen</button>
+      <button class="btn btn-secondary" onclick="closeModal('modalDraftPick')">Schließen</button>
     </div>
+  </div>
+</div>
+
+<!-- Pick-Bestätigungs-Overlay (eigene Ebene über dem Draft-Modal) -->
+<div id="pickConfirmOverlay" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:340px;background:#fff;border-radius:16px;padding:24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
+    <div style="font-size:36px;margin-bottom:10px">🏌️</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:4px">Willst du diesen Spieler picken?</div>
+    <div id="pickConfirmName" style="font-family:var(--font-display);font-size:22px;color:var(--text);margin-bottom:20px;letter-spacing:0.3px"></div>
+    <button class="btn btn-primary btn-block" onclick="acceptPickConfirm()" style="padding:14px;font-size:15px;font-weight:600;margin-bottom:8px">Ja, picken</button>
+    <button class="btn btn-secondary btn-block" onclick="cancelPickConfirm()" style="padding:12px;font-size:13px">Nein, anderen wählen</button>
   </div>
 </div>
 
@@ -2113,6 +2124,12 @@ function subscribeDraftRealtime() {
       S.poolPicks.push(payload.new);
       const member = S.poolMembers.find(m => m.id === payload.new.member_id);
       if (member) showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
+      // Drafter wechselt → "Modal vom User geschlossen"-Flag reset für nächsten Turn
+      S.userClosedDraftModal = false;
+      // Pending Pick verwerfen falls noch offen (z.B. ein anderer war schneller)
+      S.pendingPick = null;
+      const ovl = document.getElementById('pickConfirmOverlay');
+      if (ovl) ovl.style.display = 'none';
       render();
     })
     .subscribe();
@@ -2222,19 +2239,32 @@ async function tickPickTimer() {
 async function performAutoPick() {
   const current = getCurrentDrafter();
   if (!current || !current.member) return;
-  // Höchstgereihten ESPN-Spieler nehmen, der noch nicht gepickt ist.
-  // Vor Turnierstart: tournament_golfers als Quelle.
+
+  // Wenn der dran-seiende User gerade einen Spieler im Bestätigungs-Dialog hat:
+  // diesen pending Pick nehmen statt schlechtest-gerankten.
+  if (isMyTurn() && S.pendingPick) {
+    const name = S.pendingPick;
+    S.pendingPick = null;
+    const confirmEl = document.getElementById('pickConfirmOverlay');
+    if (confirmEl) confirmEl.style.display = 'none';
+    await pickGolfer(name);
+    return;
+  }
+
+  // Sonst: schlechtest-gerankten verfügbaren Spieler als Strafe für Trödeln
   const taken = new Set(S.poolPicks.map(p => normalizeName(p.golfer_name)));
   let pickName = null;
   const liveEntries = Object.entries(S.liveScores || {});
   if (liveEntries.length > 0) {
     const sorted = liveEntries
       .filter(([n]) => !taken.has(normalizeName(n)))
-      .sort((a, b) => (a[1].sortOrder || 999) - (b[1].sortOrder || 999));
+      .sort((a, b) => (b[1].sortOrder || 0) - (a[1].sortOrder || 0));  // descending → schlechtester zuerst
     pickName = sorted[0]?.[0];
   }
   if (!pickName && S.tournamentGolfers?.length) {
-    pickName = S.tournamentGolfers.map(g => g.name).find(n => !taken.has(normalizeName(n)));
+    // pre-tournament: letzter in der Liste (alphabetisch oder DB-Reihenfolge)
+    const available = S.tournamentGolfers.map(g => g.name).filter(n => !taken.has(normalizeName(n)));
+    pickName = available[available.length - 1];
   }
   if (!pickName) return;
   const { error } = await sb.from('pool_picks').insert({
@@ -3387,23 +3417,24 @@ function renderPoolDraft(c) {
       const myTurn = isMyTurn();
       const mName = memberName(current.member);
       const remaining = remainingPickSeconds();
-      const timerHtml = remaining !== null ? `
-        <div style="font-family:var(--font-display);font-size:42px;line-height:1;margin:10px 0;color:${remaining <= 10 ? 'var(--red)' : '#fff'}">${remaining}<span style="font-size:18px">s</span></div>
-      ` : '';
-      if (myTurn) {
-        const isPh = current.member.is_placeholder;
-        html += `<div style="background:var(--green);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
-          <div style="font-size:11px;letter-spacing:1px;opacity:0.85">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
-          <div style="font-size:22px;font-weight:600;margin:8px 0">${isPh ? 'Pick für ' + esc(mName) : 'Du bist dran!'}</div>
-          ${timerHtml}
-          <button class="btn" onclick="openPoolDraftModal()" style="background:#fff;color:var(--green);font-weight:600;padding:10px 20px">Spieler picken</button>
-        </div>`;
-      } else {
-        html += `<div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
-          <div style="font-size:11px;letter-spacing:1px;color:var(--text3)">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
-          <div style="font-size:16px;color:var(--text);margin-top:4px">Warte auf <strong>${esc(mName)}</strong>…</div>
-          ${remaining !== null ? `<div style="font-family:var(--font-display);font-size:32px;color:${remaining <= 10 ? 'var(--red)' : 'var(--text)'};margin-top:8px">${remaining}<span style="font-size:14px">s</span></div>` : ''}
-        </div>`;
+      const isLowTimer = remaining !== null && remaining <= 10;
+      // Einheitlicher Banner: zeigt immer "X ist dran" + Timer. Pick-Aktion läuft via Pop-Up Modal.
+      const banner = myTurn
+        ? `<div style="background:linear-gradient(135deg,var(--green) 0%,#102b4a 100%);color:#fff;padding:20px;border-radius:var(--radius);text-align:center;margin-bottom:16px;box-shadow:0 4px 16px rgba(27,58,92,0.2)">
+            <div style="font-size:11px;letter-spacing:1.5px;opacity:0.85">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
+            <div style="font-size:22px;font-weight:700;margin:8px 0">${current.member.is_placeholder ? 'Du pickst für ' + esc(mName) : 'Du bist dran!'}</div>
+            ${remaining !== null ? `<div style="font-family:var(--font-display);font-size:42px;line-height:1;color:${isLowTimer ? 'var(--red)' : '#fff'}">${remaining}<span style="font-size:18px">s</span></div>` : ''}
+          </div>`
+        : `<div style="background:var(--card);border:1px solid var(--border);padding:16px;border-radius:var(--radius);text-align:center;margin-bottom:16px">
+            <div style="font-size:11px;letter-spacing:1px;color:var(--text3)">RUNDE ${current.round} &middot; PICK ${current.pickInRound}</div>
+            <div style="font-size:18px;font-weight:600;color:var(--text);margin-top:6px">${esc(mName)} ist dran…</div>
+            ${remaining !== null ? `<div style="font-family:var(--font-display);font-size:32px;color:${isLowTimer ? 'var(--red)' : 'var(--text)'};margin-top:8px">${remaining}<span style="font-size:14px">s</span></div>` : ''}
+          </div>`;
+      html += banner;
+
+      // Auto-Modal: wenn dran und Modal nicht offen → öffnen (auch nach Scrollen)
+      if (myTurn && !S.draftModalOpen && !S.userClosedDraftModal) {
+        setTimeout(() => openPoolDraftModal(), 50);
       }
     }
   }
@@ -3571,6 +3602,7 @@ async function activatePool() {
 function openPoolDraftModal() {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
   S.draftModalOpen = true;
+  S.userClosedDraftModal = false;
   document.getElementById('inputGolferName').value = '';
   const current = getCurrentDrafter();
   const ctx = document.getElementById('draftPickContext');
@@ -3579,7 +3611,7 @@ function openPoolDraftModal() {
   }
   filterGolferList();
   openModal('modalDraftPick');
-  setTimeout(() => document.getElementById('inputGolferName').focus(), 100);
+  // Auf Handys keinen Auto-Focus (würde Software-Keyboard sofort hochziehen)
 }
 
 function filterGolferList() {
@@ -3611,13 +3643,37 @@ function filterGolferList() {
   }
   list.innerHTML = filtered.map(g => {
     const isTaken = taken.has(normalizeName(g.name));
-    return `<div onclick="${isTaken ? '' : `pickGolfer('${esc(g.name).replace(/'/g, "\\'")}')`}"
+    return `<div onclick="${isTaken ? '' : `confirmPickGolfer('${esc(g.name).replace(/'/g, "\\'")}')`}"
       style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:${isTaken ? 'not-allowed' : 'pointer'};opacity:${isTaken ? '0.4' : '1'}">
       <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}${isTaken ? ' <span style="font-size:10px;color:var(--text3)">(gewählt)</span>' : ''}</div>
       <div style="font-size:12px;color:var(--text3);min-width:32px;text-align:right">${g.position || ''}</div>
       <div style="font-family:var(--font-display);font-size:14px;font-weight:700;min-width:32px;text-align:right" class="${scoreClass(g.toPar)}">${fmtScore(g.toPar)}</div>
     </div>`;
   }).join('');
+}
+
+// Spieler antippen → Bestätigungs-Dialog. Wenn Timer abläuft während offen → Pending Pick wird ausgeführt.
+function confirmPickGolfer(name) {
+  if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+  S.pendingPick = name;
+  const confirmEl = document.getElementById('pickConfirmOverlay');
+  if (!confirmEl) return;
+  document.getElementById('pickConfirmName').textContent = name;
+  confirmEl.style.display = 'flex';
+}
+
+function cancelPickConfirm() {
+  S.pendingPick = null;
+  const confirmEl = document.getElementById('pickConfirmOverlay');
+  if (confirmEl) confirmEl.style.display = 'none';
+}
+
+async function acceptPickConfirm() {
+  const name = S.pendingPick;
+  if (!name) return;
+  S.pendingPick = null;
+  document.getElementById('pickConfirmOverlay').style.display = 'none';
+  await pickGolfer(name);
 }
 
 async function pickGolfer(name) {
@@ -3721,14 +3777,14 @@ function openModal(id) {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
-  if (id === 'modalDraftPick') S.draftModalOpen = false;
+  if (id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; }
 }
 // Close modals on backdrop click + prevent background scroll
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
     if (e.target === overlay) {
       overlay.classList.remove('open');
-      if (overlay.id === 'modalDraftPick') S.draftModalOpen = false;
+      if (overlay.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; }
       if (overlay.id === 'modalScorecard') S._openScorecardName = null;
     }
   });
