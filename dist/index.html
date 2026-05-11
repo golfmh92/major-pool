@@ -3941,6 +3941,8 @@ async function pickGolfer(name) {
   }
 
   closeModal('modalDraftPick');
+  // Pick war programmatisch (nicht User-Cancel) → Auto-Modal bei Snake-Doppel-Turn wieder zulassen
+  S.userClosedDraftModal = false;
   showToast(name + ' gedraftet!');
   render();
 }
