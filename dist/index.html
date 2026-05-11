@@ -1412,6 +1412,15 @@ function renderProfile() {
       <div style="width:64px;height:64px;border-radius:50%;background:var(--green);color:#fff;font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">${p.avatar_initials || '?'}</div>
       <div style="font-family:var(--font-display);font-size:22px;color:var(--text)">${esc(p.name)}</div>
       <div style="font-size:13px;color:var(--text2)">${esc(p.email)}</div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0">
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">ANZEIGENAME</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">So sehen dich andere im Pool. Z.B. dein Vorname statt der E-Mail-Adresse.</div>
+      <div style="display:flex;gap:8px">
+        <input class="input" type="text" id="displayNameInput" value="${esc(p.name || '')}" maxlength="40" style="flex:1;padding:10px;font-size:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">
+        <button class="btn btn-primary" onclick="saveDisplayName()" style="padding:10px 16px;font-size:13px">Speichern</button>
+      </div>
     </div>`;
 
   if (S.activePool) {
@@ -1453,6 +1462,25 @@ function renderProfile() {
 
   c.innerHTML = html;
   loadPoolArchive();
+}
+
+async function saveDisplayName() {
+  const newName = (document.getElementById('displayNameInput')?.value || '').trim();
+  if (!newName) { showToast('Name darf nicht leer sein'); return; }
+  if (newName.length > 40) { showToast('Max. 40 Zeichen'); return; }
+  if (!S.userId) { showToast('Nicht eingeloggt'); return; }
+  const initials = newName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const { error } = await sb.from('users')
+    .update({ name: newName, avatar_initials: initials })
+    .eq('id', S.userId);
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  if (S.userProfile) {
+    S.userProfile.name = newName;
+    S.userProfile.avatar_initials = initials;
+  }
+  S.myName = newName;
+  showToast('Anzeigename gespeichert ✓');
+  render();
 }
 
 async function setUserPassword() {
@@ -2557,13 +2585,13 @@ function renderRangliste() {
   }) : ranking;
 
   // Compute ranks with ties
-  let rank = 0, prevTotal = null;
+  let rank = 0;
+  let prevCmp = '__INIT__';  // sentinel, damit null !== '__INIT__'
   filtered.forEach((t, i) => {
     if (!t.isEliminated) {
       const cmpScore = rd === 0 ? t.total : t.rounds[rd - 1];
-      const prevCmp = prevTotal;
       if (cmpScore !== prevCmp) rank = i + 1;
-      prevTotal = cmpScore;
+      prevCmp = cmpScore;
     }
     t._rank = t.isEliminated ? 0 : rank;
   });
@@ -2633,12 +2661,14 @@ function renderRangliste() {
     // Picks für dieses Team
     const picks = S.poolPicks.filter(p => p.member_id === t.member_id);
 
-    // Summary unter Name
+    // Summary unter Name — Runden kompakt in einer Zeile
     let summary;
     if (rd === 0) {
-      summary = t.rounds.map((r, ri) => `<span style="margin-right:8px">R${ri+1}: ${fmtScore(r)}</span>`).join('');
+      summary = '<div style="display:flex;gap:6px;white-space:nowrap;overflow:hidden">' +
+        t.rounds.map((r, ri) => `<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:var(--bg2)">R${ri+1}:${fmtScore(r)}</span>`).join('') +
+        '</div>';
     } else {
-      summary = `<span>${picks.length} Picks</span>`;
+      summary = `<span style="font-size:11px">${picks.length} Picks</span>`;
     }
 
     // Expand: Tabelle mit Golfern + R1-R4 Scores
