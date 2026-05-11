@@ -2590,10 +2590,11 @@ function renderLeaderboardTab() {
     });
   }
 
-  // Separate favorites
+  // Favoriten zusätzlich oben anzeigen — die normale Liste (otherEntries) bleibt
+  // komplett (Favoriten doppelt: oben + an ihrer normalen Position).
   const favSet = new Set(S.favorites || []);
   const favEntries = entries.filter(([name]) => favSet.has(name));
-  const otherEntries = entries.filter(([name]) => !favSet.has(name));
+  const otherEntries = entries;
 
   let html = meineHtml;
   html += `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:12px">${esc(S.liveEventName)}</div>`;
@@ -2656,11 +2657,11 @@ function renderLeaderboardTab() {
     </div>`;
   }
 
-  // Favorites section
+  // Favoriten-Sektion oben (Spieler erscheinen zusätzlich an ihrer normalen Position weiter unten)
   if (favEntries.length > 0) {
-    html += '<div class="fav-divider">Favoriten</div>';
+    html += '<div class="fav-divider">⭐ Favoriten</div>';
     html += favEntries.map(([name, data]) => renderGolferEntry(name, data, true)).join('');
-    html += '<div class="fav-divider">Alle Spieler</div>';
+    html += '<div class="fav-divider">Komplettes Leaderboard</div>';
   }
 
   // Cut line detection
@@ -2739,10 +2740,13 @@ function showScorecardByName(playerName) {
   openModal('modalScorecard');
 }
 
+// Aronimink Golf Club Pars (PGA Championship 2026, Par 70)
+const ARONIMINK_PARS = [4,4,4,4,3,4,4,4,4, 4,4,3,4,4,5,3,4,4];
+
 function renderScorecardContent(name, live) {
   const poolPar = (S.activePool?.par) || PAR;
 
-  // Header
+  // Owners (für PGA Pool: wer hat den Spieler im Team)
   const owners = [];
   if (S.activePool) {
     S.poolPicks.forEach(p => {
@@ -2753,107 +2757,154 @@ function renderScorecardContent(name, live) {
     });
   }
 
+  // Header
   const headerHtml = `<div class="scorecard-header">
     ${live.headshot ? `<img class="scorecard-avatar" src="${live.headshot}" onerror="this.style.display='none'">` : `<div class="scorecard-avatar-fallback">${name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
     <div class="scorecard-header-info">
-      <div style="font-family:var(--font-display);font-size:20px;color:var(--text)">${esc(name)}</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
-        <span style="font-size:12px;color:var(--text2)">${live.position || ''}</span>
-        <span style="font-family:var(--font-display);font-size:18px;font-weight:700" class="${live.toPar < 0 ? 'under' : live.toPar > 0 ? 'over' : 'even'}">${fmtScore(live.toPar)}</span>
-        ${live.thru && !live.finished ? `<span style="font-size:11px;color:var(--text3)">thru ${live.thru}</span>` : ''}
+      <div style="font-family:var(--font-display);font-size:20px;color:var(--text);letter-spacing:0.5px">${esc(name)}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:2px">
+        ${live.position ? `Platz ${live.position}` : ''}
+        ${live.thru && live.thru !== 'F' && live.statusState !== 'pre' ? ` · thru ${live.thru}` : ''}
       </div>
-      ${owners.length > 0 ? `<div style="font-size:10px;color:var(--green);font-weight:600;margin-top:2px">${owners.map(esc).join(' · ')}</div>` : ''}
+      ${owners.length > 0 ? `<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:3px">${owners.map(esc).join(' · ')}</div>` : ''}
     </div>
   </div>`;
 
-  // Hole-by-hole scorecard
   function holeClass(relPar) {
     if (relPar === null || relPar === undefined) return 'sc-par';
-    if (relPar <= -2) return 'sc-eagle';
-    if (relPar === -1) return 'sc-birdie';
-    if (relPar === 1) return 'sc-bogey';
-    if (relPar >= 2) return 'sc-dbl';
+    const v = typeof relPar === 'number' ? relPar : (relPar === 'E' ? 0 : parseInt(relPar));
+    if (isNaN(v)) return 'sc-par';
+    if (v <= -2) return 'sc-eagle';
+    if (v === -1) return 'sc-birdie';
+    if (v === 1) return 'sc-bogey';
+    if (v >= 2) return 'sc-dbl';
     return 'sc-par';
   }
 
-  function buildNine(start, end, label) {
-    const activeRounds = [];
-    for (let r = 1; r <= 4; r++) {
-      if (live.holes && live.holes['r' + r] && live.holes['r' + r].length > 0) activeRounds.push(r);
+  // Welche Runden haben Daten?
+  const activeRounds = [];
+  for (let r = 1; r <= 4; r++) {
+    const rh = live.holes && live.holes['r' + r];
+    if (rh && rh.length > 0) activeRounds.push(r);
+  }
+
+  let bodyHtml = '';
+
+  // Summary oben (kompakt)
+  if (activeRounds.length > 0) {
+    bodyHtml += '<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;font-size:13px">';
+    bodyHtml += `<div style="color:var(--text2)">Gesamt: <strong class="${live.toPar < 0 ? 'birdie' : live.toPar > 0 ? 'bogey' : 'even'}">${fmtScore(live.toPar)}</strong></div>`;
+    for (const r of activeRounds) {
+      const sc = live['r' + r];
+      const tp = sc ? sc - poolPar : null;
+      const midRoundDisplay = (live.currentRound === r && live['r' + r + '_toPar'] !== undefined)
+        ? fmtScore(live['r' + r + '_toPar']) + ' (' + (live.thru || '') + ')'
+        : null;
+      const tpClass = tp !== null ? (tp < 0 ? 'birdie' : tp > 0 ? 'bogey' : 'even') : '';
+      bodyHtml += `<div style="color:var(--text3)">R${r}: <strong class="${tpClass}">${tp !== null ? fmtScore(tp) : (midRoundDisplay || '—')}</strong></div>`;
     }
-    if (activeRounds.length === 0) return '';
+    bodyHtml += '</div>';
+  }
 
-    let t = '<table class="scorecard"><thead><tr><th>Loch</th>';
-    for (let i = start; i <= end; i++) t += `<th class="hole-num">${i}</th>`;
-    t += `<th>${label}</th></tr></thead><tbody>`;
+  // Pre-tournament
+  if (activeRounds.length === 0) {
+    if (live.statusState === 'pre' && live.teeTime) {
+      const t = new Date(live.teeTime);
+      bodyHtml += `<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Noch nicht gestartet<br><br>Tee Time: <strong>${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}</strong>${live.startHole ? ` (Loch ${live.startHole})` : ''}</div>`;
+    } else {
+      bodyHtml += `<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Noch keine Loch-Daten</div>`;
+    }
+    document.getElementById('scorecardTitle').innerHTML = headerHtml;
+    document.getElementById('scorecardContent').innerHTML = bodyHtml;
+    return;
+  }
 
-    // Par row (from hole data)
-    t += '<tr style="background:var(--bg)"><td style="font-weight:600;font-size:10px">PAR</td>';
-    let parSum = 0;
-    for (let i = start; i <= end; i++) {
-      // Get par from first available round's hole data
-      let holePar = null;
-      for (const r of activeRounds) {
-        const h = (live.holes['r' + r] || []).find(x => x.hole === i);
-        if (h && h.par) {
-          const parMap = { 'Birdie': -1, 'Eagle': -2, 'Bogey': 1, 'Double Bogey': 2, 'Par': 0, 'Ace': null };
-          const rel = parMap[h.par];
-          if (rel !== undefined && rel !== null) { holePar = h.score - rel; }
-          break;
+  // Helper: ermittle Loch-Par (entweder von ESPN-Daten oder Aronimink-Fallback)
+  function getHolePar(holeNum) {
+    // Versuche aus aktiven Runden zu lesen (ESPN liefert hole.par als '-1', 'E', '+1' relativ)
+    for (const r of activeRounds) {
+      const h = (live.holes['r' + r] || []).find(x => x.hole === holeNum);
+      if (h && h.score && h.par !== undefined && h.par !== null) {
+        // Numeric par-relative ('-1', 'E', '+1') von ESPN
+        let rel = null;
+        if (h.par === 'E') rel = 0;
+        else if (typeof h.par === 'number') rel = h.par;
+        else if (typeof h.par === 'string') {
+          const parsed = parseInt(h.par);
+          if (!isNaN(parsed)) rel = parsed;
+          // Falls ESPN-Enum-Strings
+          const enumMap = { 'Birdie': -1, 'Eagle': -2, 'Albatross': -3, 'Bogey': 1, 'Double Bogey': 2, 'Triple Bogey': 3, 'Par': 0 };
+          if (rel === null && enumMap[h.par] !== undefined) rel = enumMap[h.par];
         }
+        if (rel !== null) return h.score - rel;
       }
-      if (!holePar) holePar = poolPar / 18 > 3.5 ? 4 : 3; // rough fallback
-      parSum += holePar;
-      t += `<td style="font-size:10px;color:var(--text3)">${holePar}</td>`;
     }
-    t += `<td style="font-size:10px;font-weight:600">${parSum}</td></tr>`;
+    // Fallback: Aronimink Standard-Pars
+    return ARONIMINK_PARS[holeNum - 1] || 4;
+  }
 
-    // Score rows per round
+  // Helper: rel-par für einen Score auf einem Loch
+  function getRelPar(hole, holeNum) {
+    if (!hole || !hole.score) return null;
+    if (hole.par === 'E') return 0;
+    if (typeof hole.par === 'number') return hole.par;
+    if (typeof hole.par === 'string') {
+      const parsed = parseInt(hole.par);
+      if (!isNaN(parsed)) return parsed;
+      const enumMap = { 'Birdie': -1, 'Eagle': -2, 'Albatross': -3, 'Bogey': 1, 'Double Bogey': 2, 'Triple Bogey': 3, 'Par': 0 };
+      if (enumMap[hole.par] !== undefined) return enumMap[hole.par];
+    }
+    // Fallback via Aronimink-Par
+    const ap = ARONIMINK_PARS[holeNum - 1];
+    if (ap) return hole.score - ap;
+    return null;
+  }
+
+  function buildNine(start, end, label, withTotalCol) {
+    let t = '<table class="scorecard"><thead><tr><th></th>';
+    for (let i = start; i <= end; i++) t += `<th>${i}</th>`;
+    t += `<th>${label}</th>`;
+    if (withTotalCol) t += '<th>Tot</th>';
+    t += '</tr></thead><tbody>';
+
+    // Par-Zeile
+    t += '<tr><td class="hole-num">Par</td>';
+    let parSum = 0;
+    let parTotalAll = 0;
+    for (let i = start; i <= end; i++) { const p = getHolePar(i); parSum += p; t += `<td style="color:var(--text3)">${p}</td>`; }
+    for (let i = 1; i <= 18; i++) parTotalAll += getHolePar(i);
+    t += `<td style="font-weight:600;color:var(--text3)">${parSum}</td>`;
+    if (withTotalCol) t += `<td style="font-weight:600;color:var(--text3)">${parTotalAll}</td>`;
+    t += '</tr>';
+
+    // Score pro Runde
     for (const r of activeRounds) {
       const roundHoles = live.holes['r' + r] || [];
-      t += `<tr><td style="font-weight:600;font-size:10px">R${r}</td>`;
-      let sum = 0; let count = 0;
+      const roundScore = live['r' + r];
+      t += `<tr><td class="hole-num" style="font-weight:600;color:var(--green)">R${r}</td>`;
+      let sum = 0, count = 0;
       for (let i = start; i <= end; i++) {
         const h = roundHoles.find(x => x.hole === i);
         if (h && h.score) {
-          const parMap = { 'Birdie': -1, 'Eagle': -2, 'Bogey': 1, 'Double Bogey': 2, 'Par': 0, 'Ace': -100 };
-          const rel = parMap[h.par] ?? 0;
+          const rel = getRelPar(h, i);
           const cls = holeClass(rel);
           sum += h.score; count++;
-          t += `<td data-sc="r${r}h${i}"><span class="${cls}">${h.score}</span></td>`;
+          t += `<td data-sc="r${r}h${i}"><span class="${cls}">${Math.round(h.score)}</span></td>`;
         } else {
-          t += '<td></td>';
+          t += `<td style="color:var(--text3)">—</td>`;
         }
       }
-      t += `<td style="font-weight:600">${count > 0 ? sum : ''}</td></tr>`;
+      t += `<td style="font-weight:700">${count > 0 ? Math.round(sum) : '—'}</td>`;
+      if (withTotalCol) t += `<td style="font-weight:700">${roundScore || ''}</td>`;
+      t += '</tr>';
     }
     t += '</tbody></table>';
     return t;
   }
 
-  // Pre-start: show tee time
-  let bodyHtml = '';
-  if (live.statusState === 'pre' && live.teeTime) {
-    const t = new Date(live.teeTime);
-    bodyHtml += `<div style="text-align:center;padding:20px 0;color:var(--text2);font-size:14px">Tee Time: ${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')} (Loch ${live.startHole || 1})</div>`;
-  }
-
-  bodyHtml += buildNine(1, 9, 'OUT');
-  bodyHtml += buildNine(10, 18, 'IN');
-
-  // Summary
-  if (live.holes && Object.keys(live.holes).length > 0) {
-    bodyHtml += '<div style="display:flex;justify-content:flex-end;gap:12px;padding:8px 0;font-size:12px">';
-    for (let r = 1; r <= 4; r++) {
-      if (live['r' + r]) {
-        const rtp = live['r' + r] - poolPar;
-        bodyHtml += `<span>R${r}: <strong class="${rtp < 0 ? 'under' : rtp > 0 ? 'over' : 'even'}">${fmtScore(rtp)}</strong></span>`;
-      } else if (live['r' + r + '_toPar'] !== undefined) {
-        bodyHtml += `<span>R${r}: <strong class="${live['r'+r+'_toPar'] < 0 ? 'under' : live['r'+r+'_toPar'] > 0 ? 'over' : 'even'}">${fmtScore(live['r'+r+'_toPar'])}</strong> (${live.thru})</span>`;
-      }
-    }
-    bodyHtml += '</div>';
-  }
+  bodyHtml += buildNine(1, 9, 'OUT', false);
+  bodyHtml += '<div style="height:4px"></div>';
+  bodyHtml += buildNine(10, 18, 'IN', true);
 
   document.getElementById('scorecardTitle').innerHTML = headerHtml;
   document.getElementById('scorecardContent').innerHTML = bodyHtml;
