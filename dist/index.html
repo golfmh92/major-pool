@@ -2838,16 +2838,32 @@ function renderLeaderboardTab() {
       </div>`;
 
     if (field.length > 0) {
+      const favSet = new Set(S.favorites || []);
+      // Favoriten zuerst, dann Rest (alphabetisch wie aus DB)
+      const favList = field.filter(g => favSet.has(g.name));
+      const restList = field.filter(g => !favSet.has(g.name));
       html += `
-        <div style="padding:18px 16px 8px">
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text2);margin-bottom:10px">FIELD · ${field.length} SPIELER</div>
+        <div style="padding:18px 16px 4px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text2);margin-bottom:4px">FIELD · ${field.length} SPIELER</div>
+          <div style="font-size:11px;color:var(--text3)">Tap auf ⭐ um Spieler zu favorisieren — werden ab Turnierstart oben angezeigt</div>
         </div>`;
-      html += '<div style="padding:0 12px">';
-      html += field.map((g, i) => `
-        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:6px">
-          <div style="font-family:var(--font-display);font-size:13px;color:var(--text3);min-width:24px">${i + 1}</div>
+
+      function renderFieldRow(g, idx) {
+        const isFav = favSet.has(g.name);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--card);border:1px solid ${isFav ? 'var(--gold)' : 'var(--border)'};border-radius:10px;margin-bottom:6px">
+          <div style="font-family:var(--font-display);font-size:13px;color:var(--text3);min-width:24px">${idx}</div>
           <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}</div>
-        </div>`).join('');
+          <button onclick="event.stopPropagation();toggleFavorite('${esc(g.name).replace(/'/g, "\\'")}')" style="background:none;border:none;cursor:pointer;padding:4px;color:${isFav ? 'var(--gold)' : 'var(--text3)'};font-size:18px;line-height:1">${isFav ? '⭐' : '☆'}</button>
+        </div>`;
+      }
+
+      html += '<div style="padding:0 12px">';
+      if (favList.length > 0) {
+        html += '<div style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:1.5px;margin:8px 4px 6px">⭐ FAVORITEN</div>';
+        html += favList.map((g, i) => renderFieldRow(g, i + 1)).join('');
+        html += '<div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;margin:12px 4px 6px">ALLE SPIELER</div>';
+      }
+      html += restList.map((g, i) => renderFieldRow(g, favList.length + i + 1)).join('');
       html += '</div>';
       html += `<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Live-Scores starten am Turniertag automatisch</div>`;
     } else {
