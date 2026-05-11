@@ -2271,7 +2271,6 @@ async function initApp() {
     await loadActivePool();
     if (S.activePool) {
       await loadPoolData();
-      await loadTournament();
       subscribeDraftRealtime();
       subscribePoolRealtime();
       if (S.activePool.status === 'drafting') ensurePickTimer();
@@ -2282,6 +2281,9 @@ async function initApp() {
     }
   }
 
+  // Tournament + Field laden (immer — auch ohne Pool, für standalone Leaderboard)
+  await loadTournament();
+
   // Always fetch ESPN live data (works for guests too)
   fetchLiveScores();
 
@@ -2291,15 +2293,25 @@ async function initApp() {
 }
 
 async function loadTournament() {
-  if (!S.activePool || !S.activePool.tournament_id) {
-    S.tournament = null;
-    S.tournamentGolfers = [];
+  // Mit aktivem Pool: dessen Tournament. Sonst: nächstes "upcoming" oder laufendes "in_progress"
+  if (S.activePool && S.activePool.tournament_id) {
+    const [{ data: t }, { data: g }] = await Promise.all([
+      sb.from('tournaments').select('*').eq('id', S.activePool.tournament_id).maybeSingle(),
+      sb.from('tournament_golfers').select('*').eq('tournament_id', S.activePool.tournament_id).order('total_score', { nullsFirst: false })
+    ]);
+    S.tournament = t;
+    S.tournamentGolfers = g || [];
     return;
   }
-  const [{ data: t }, { data: g }] = await Promise.all([
-    sb.from('tournaments').select('*').eq('id', S.activePool.tournament_id).maybeSingle(),
-    sb.from('tournament_golfers').select('*').eq('tournament_id', S.activePool.tournament_id).order('total_score', { nullsFirst: false })
-  ]);
+  // Standalone: nimm nächstes upcoming/in_progress Turnier
+  const { data: ts } = await sb.from('tournaments')
+    .select('*')
+    .in('status', ['in_progress', 'upcoming'])
+    .order('start_date', { ascending: true })
+    .limit(1);
+  const t = ts?.[0] || null;
+  if (!t) { S.tournament = null; S.tournamentGolfers = []; return; }
+  const { data: g } = await sb.from('tournament_golfers').select('*').eq('tournament_id', t.id);
   S.tournament = t;
   S.tournamentGolfers = g || [];
 }
@@ -2448,12 +2460,50 @@ function renderLeaderboardTab() {
   const hasLive = Object.keys(S.liveScores).length > 0;
 
   if (!hasLive) {
-    c.innerHTML = `<div class="empty" style="padding:40px 20px;text-align:center">
-      <div style="font-size:48px;margin-bottom:12px">&#9971;</div>
-      <div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:8px">${S.liveEventName || 'Turnier-Leaderboard'}</div>
-      <div style="font-size:13px;color:var(--text2)">Live-Scores werden von ESPN geladen...</div>
-      <div class="spinner" style="margin-top:16px"></div>
-    </div>`;
+    // Pre-Tournament: Field aus tournament_golfers + Countdown anzeigen
+    const tournament = S.tournament || S.tournaments?.find(t => t.status === 'upcoming') || null;
+    const field = S.tournamentGolfers || [];
+    const startDate = tournament?.start_date ? new Date(tournament.start_date) : null;
+    const now = new Date();
+    let countdownHtml = '';
+    if (startDate) {
+      const diffMs = startDate.getTime() - now.getTime();
+      const days = Math.ceil(diffMs / 86400000);
+      if (days > 0) {
+        countdownHtml = `<div style="display:inline-block;padding:6px 14px;background:var(--red);color:#fff;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">🏆 IN ${days} TAG${days === 1 ? '' : 'EN'}</div>`;
+      } else if (days === 0) {
+        countdownHtml = `<div style="display:inline-block;padding:6px 14px;background:var(--green);color:#fff;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">🏌️ HEUTE GEHT'S LOS</div>`;
+      }
+    }
+
+    let html = `
+      <div style="text-align:center;padding:30px 20px 20px;background:var(--card);border-bottom:1px solid var(--border)">
+        ${countdownHtml}
+        <div style="font-family:var(--font-display);font-size:24px;color:var(--text);letter-spacing:1px;margin-bottom:4px">${esc(tournament?.name || 'PGA Championship')}</div>
+        ${tournament?.start_date ? `<div style="font-size:12px;color:var(--text2)">${new Date(tournament.start_date).toLocaleDateString('de-AT', {day:'2-digit', month:'long', year:'numeric'})}</div>` : ''}
+      </div>`;
+
+    if (field.length > 0) {
+      html += `
+        <div style="padding:18px 16px 8px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text2);margin-bottom:10px">FIELD · ${field.length} SPIELER</div>
+        </div>`;
+      html += '<div style="padding:0 12px">';
+      html += field.map((g, i) => `
+        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:6px">
+          <div style="font-family:var(--font-display);font-size:13px;color:var(--text3);min-width:24px">${i + 1}</div>
+          <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}</div>
+        </div>`).join('');
+      html += '</div>';
+      html += `<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Live-Scores starten am Turniertag automatisch</div>`;
+    } else {
+      html += `<div class="empty" style="padding:40px 20px;text-align:center">
+        <div style="font-size:13px;color:var(--text2)">Field wird vorbereitet…</div>
+        <div class="spinner" style="margin-top:16px"></div>
+      </div>`;
+    }
+
+    c.innerHTML = html;
     return;
   }
 
