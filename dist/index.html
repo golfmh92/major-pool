@@ -1066,19 +1066,12 @@ async function doPasswordLogin() {
     console.log('[login] result', { hasUser: !!data?.user, error });
     if (error) { showAuthError(error.message); return; }
     if (data?.user) {
-      try {
-        await Promise.race([
-          onAuthSuccess(data.user),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('Profile-Load timeout')), 5000))
-        ]);
-      } catch (e) {
-        console.warn('[login] onAuthSuccess hung, fallback UI', e);
-        currentUser = data.user;
-        S.userId = data.user.id;
-        S.isGuest = false;
-        document.getElementById('authScreen').style.display = 'none';
-        document.getElementById('app').style.display = '';
-      }
+      // Session ist in localStorage. Reload statt onAuthSuccess (das hängt wegen
+      // verklemmtem supabase-js nach Session-Manipulation). Beim Reload startet
+      // alles frisch und Boot findet die Session.
+      console.log('[login] success → reload');
+      location.reload();
+      return;
     }
   } catch (e) {
     showAuthError(e.message || 'Login fehlgeschlagen');
@@ -1114,19 +1107,12 @@ async function doRegister() {
     // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
     // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
     if (data?.session?.user) {
-      try {
-        await Promise.race([
-          onAuthSuccess(data.session.user),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('Profile-Load timeout')), 5000))
-        ]);
-      } catch (e) {
-        console.warn('[register] onAuthSuccess hung, fallback', e);
-        currentUser = data.session.user;
-        S.userId = data.session.user.id;
-        S.isGuest = false;
-        document.getElementById('authScreen').style.display = 'none';
-        document.getElementById('app').style.display = '';
-      }
+      // Session ist gesetzt → reload für frischen Start
+      console.log('[register] success → reload');
+      // Pending Name in localStorage damit onAuthSuccess das Profil mit echtem Name anlegt
+      localStorage.setItem('pgaPool_pendingName', name);
+      location.reload();
+      return;
     } else {
       document.getElementById('sentEmail').textContent = email;
       document.getElementById('authPass').style.display = 'none';
@@ -1198,7 +1184,7 @@ async function onAuthSuccess(user) {
   if (profErr) console.warn('[auth] profile load error', profErr);
   // Falls users-Zeile fehlt (Erstanmeldung via Magic Link), automatisch anlegen
   if (!profile) {
-    const pendingName = sessionStorage.getItem('pgaPool_pendingName');
+    const pendingName = localStorage.getItem('pgaPool_pendingName') || sessionStorage.getItem('pgaPool_pendingName');
     const fallbackName = pendingName || user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
     const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     const { data: inserted, error: insErr } = await sb.from('users')
@@ -1206,6 +1192,7 @@ async function onAuthSuccess(user) {
       .select().single();
     if (insErr) console.warn('[auth] auto-create users row failed', insErr);
     profile = inserted;
+    localStorage.removeItem('pgaPool_pendingName');
     sessionStorage.removeItem('pgaPool_pendingName');
   }
   S.userProfile = profile;
