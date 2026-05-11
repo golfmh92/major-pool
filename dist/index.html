@@ -54,6 +54,7 @@ body::before{content:'';position:fixed;inset:0;background:
 /* ===== Header ===== */
 .app-header{padding:18px 20px 14px;text-align:center;flex-shrink:0;position:relative;background:linear-gradient(135deg,#1B3A5C,#0F2440);color:#fff}
 .app-header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#E63946,#FF6B6B,#E63946)}
+.header-tagline{font-family:'Inter',sans-serif;font-size:10px;color:#E63946;letter-spacing:5px;text-transform:uppercase;margin-top:6px;font-weight:700}
 .header-top{font-family:'Bebas Neue',Impact,sans-serif;font-size:10px;letter-spacing:5px;color:#E63946;line-height:1;margin-bottom:4px}
 .header-title{font-family:'Anton',Impact,sans-serif;font-size:30px;font-weight:400;color:#fff;letter-spacing:4px;text-transform:uppercase;line-height:1.05}
 .header-sub{font-family:'Inter',sans-serif;font-size:9px;color:rgba(255,255,255,.65);letter-spacing:4px;text-transform:uppercase;margin-top:5px;font-weight:600}
@@ -453,7 +454,8 @@ body::before{content:'';position:fixed;inset:0;background:
       <span id="avatarText">?</span>
     </div>
     <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">MAJOR POOL</div>
-    <div class="header-sub" id="headerSub"></div>
+    <div class="header-tagline">Draft &middot; Watch &middot; Win</div>
+    <div class="header-sub" id="headerSub" style="margin-top:8px"></div>
     <div class="live-badge stale" id="liveBadge" style="display:none"><div class="live-dot"></div><span id="liveText">Live</span></div>
     <button class="header-admin" id="btnPush" style="right:16px;display:none" onclick="togglePushDropdown()">
       <svg viewBox="0 0 24 24" id="pushIcon"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1043,6 +1045,19 @@ async function doRegister() {
     password: pass,
     options: { data: { name }, emailRedirectTo: window.location.href }
   });
+
+  // Auth-User existiert schon (z.B. aus anderer App auf gleicher Supabase-Instanz)
+  // → Wenn das eingegebene Passwort stimmt, einfach einloggen und public.users wird
+  //   in onAuthSuccess idempotent angelegt.
+  if (error && /already.*regist|already exists|user_already_exists/i.test(error.message || '')) {
+    const { error: signInErr } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (signInErr) {
+      showAuthError('Diese E-Mail ist bereits registriert. Bitte unter „Anmelden" mit deinem bestehenden Passwort einloggen oder „Passwort vergessen" klicken.');
+      return;
+    }
+    return; // onAuthStateChange → onAuthSuccess
+  }
+
   if (error) { showAuthError(error.message); return; }
   // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
   // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
@@ -1436,8 +1451,7 @@ function renderProfile() {
     </div>
 
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0">
-      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">ANZEIGENAME</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">So sehen dich andere im Pool. Z.B. dein Vorname statt der E-Mail-Adresse.</div>
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:10px">ANZEIGENAME</div>
       <div style="display:flex;gap:8px">
         <input class="input" type="text" id="displayNameInput" value="${esc(p.name || '')}" maxlength="40" style="flex:1;padding:10px;font-size:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">
         <button class="btn btn-primary" onclick="saveDisplayName()" style="padding:10px 16px;font-size:13px">Speichern</button>
