@@ -385,12 +385,26 @@ body::before{content:'';position:fixed;inset:0;background:
       <div style="font-size:13px;color:var(--text2);margin-top:4px">Golf Pool mit Freunden</div>
     </div>
 
+    <!-- Mode Toggle: Magic Link vs Passwort -->
+    <div style="display:flex;background:var(--bg2);border-radius:10px;overflow:hidden;margin-bottom:20px;border:1px solid var(--border)">
+      <button id="authTabMagic" onclick="switchAuthMode('magic')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:var(--green);color:#fff;transition:all .15s">Magic Link</button>
+      <button id="authTabPass" onclick="switchAuthMode('pass')" style="flex:1;padding:10px;font-family:var(--font-body);font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--text2);transition:all .15s">Passwort</button>
+    </div>
+
     <!-- Magic Link Form -->
     <div id="authMagic">
       <input class="input" type="text" id="loginName" placeholder="Dein Name" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="name">
       <input class="input" type="email" id="loginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
       <button class="btn btn-primary btn-block" id="btnSendMagicLink" onclick="doSendMagicLink()" style="width:100%;padding:14px;font-size:15px">Magic Link senden</button>
       <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">Du bekommst einen Login-Link per Mail. Ein Klick — eingeloggt.</div>
+    </div>
+
+    <!-- Passwort Form -->
+    <div id="authPass" style="display:none">
+      <input class="input" type="email" id="passLoginEmail" placeholder="E-Mail" style="width:100%;margin-bottom:10px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="email" inputmode="email">
+      <input class="input" type="password" id="passLoginPassword" placeholder="Passwort" style="width:100%;margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:15px" autocomplete="current-password">
+      <button class="btn btn-primary btn-block" onclick="doPasswordLogin()" style="width:100%;padding:14px;font-size:15px">Einloggen</button>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:12px">Passwort kannst du im Profil nach dem Magic-Link-Login setzen.</div>
     </div>
 
     <!-- Magic Link Sent State -->
@@ -418,7 +432,7 @@ body::before{content:'';position:fixed;inset:0;background:
       <span id="avatarText">?</span>
     </div>
     <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">PGA POOL</div>
-    <div class="header-sub">April 2026</div>
+    <div class="header-sub" id="headerSub">PGA Championship · 14.–17. Mai</div>
     <div class="live-badge stale" id="liveBadge" style="display:none"><div class="live-dot"></div><span id="liveText">Live</span></div>
     <button class="header-admin" id="btnPush" style="right:16px;display:none" onclick="togglePushDropdown()">
       <svg viewBox="0 0 24 24" id="pushIcon"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -895,9 +909,41 @@ function showAuthError(msg) {
 }
 
 function resetAuthForm() {
-  document.getElementById('authMagic').style.display = '';
+  switchAuthMode('magic');
   document.getElementById('authMagicSent').style.display = 'none';
   document.getElementById('authError').style.display = 'none';
+}
+
+function switchAuthMode(mode) {
+  const magic = document.getElementById('authMagic');
+  const pass = document.getElementById('authPass');
+  const sent = document.getElementById('authMagicSent');
+  const tabMagic = document.getElementById('authTabMagic');
+  const tabPass = document.getElementById('authTabPass');
+  if (!magic || !pass) return;
+  sent.style.display = 'none';
+  if (mode === 'pass') {
+    magic.style.display = 'none';
+    pass.style.display = '';
+    tabMagic.style.background = 'transparent'; tabMagic.style.color = 'var(--text2)';
+    tabPass.style.background = 'var(--green)'; tabPass.style.color = '#fff';
+  } else {
+    magic.style.display = '';
+    pass.style.display = 'none';
+    tabMagic.style.background = 'var(--green)'; tabMagic.style.color = '#fff';
+    tabPass.style.background = 'transparent'; tabPass.style.color = 'var(--text2)';
+  }
+  document.getElementById('authError').style.display = 'none';
+}
+
+async function doPasswordLogin() {
+  const email = document.getElementById('passLoginEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('passLoginPassword').value;
+  if (!email || !pass) { showAuthError('E-Mail und Passwort eingeben'); return; }
+  document.getElementById('authError').style.display = 'none';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { showAuthError(error.message); return; }
+  // onAuthStateChange erledigt den Rest (onAuthSuccess)
 }
 
 async function doSendMagicLink() {
@@ -1019,6 +1065,28 @@ async function createPool() {
   const picksPerMember = parseInt(document.getElementById('poolPicksPerMember').value) || 4;
   const pickSeconds = parseInt(document.getElementById('poolPickSeconds').value) || 60;
 
+  // Aktuelle Session immer frisch aus Supabase holen — S.userId kann stale sein
+  const { data: { session }, error: sessErr } = await sb.auth.getSession();
+  if (sessErr || !session?.user?.id) {
+    showToast('Login abgelaufen — bitte neu anmelden');
+    await sb.auth.signOut();
+    location.reload();
+    return;
+  }
+  const uid = session.user.id;
+  S.userId = uid;
+
+  // Sicherstellen, dass public.users-Profile existiert (RLS-FK setzt das voraus)
+  const { data: existingProfile } = await sb.from('users').select('id').eq('id', uid).maybeSingle();
+  if (!existingProfile) {
+    const fallbackName = session.user.user_metadata?.name || (session.user.email || '').split('@')[0] || 'User';
+    const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const { error: profErr } = await sb.from('users').insert({
+      id: uid, name: fallbackName, email: session.user.email, avatar_initials: initials
+    });
+    if (profErr) { showToast('Profil-Anlage fehlgeschlagen: ' + profErr.message); return; }
+  }
+
   const { data: pool, error } = await sb.from('pools').insert({
     name,
     tournament_id: tournamentId,
@@ -1030,14 +1098,15 @@ async function createPool() {
     picks_per_member: picksPerMember,
     pick_seconds: pickSeconds,
     status: 'lobby',
-    created_by: S.userId
+    created_by: uid
   }).select().single();
 
   if (error) { showToast('Fehler: ' + error.message); return; }
 
-  await sb.from('pool_members').insert({
-    pool_id: pool.id, user_id: S.userId, is_admin: true, draft_position: 1
+  const { error: memErr } = await sb.from('pool_members').insert({
+    pool_id: pool.id, user_id: uid, is_admin: true, draft_position: 1
   });
+  if (memErr) { showToast('Member-Anlage fehlgeschlagen: ' + memErr.message); return; }
 
   S.activePool = pool;
   closeModal('modalCreatePool');
@@ -1134,7 +1203,7 @@ function updateTabs() {
 
   const tabConfig = {
     rangliste: hasPool,
-    leaderboard: hasPool,
+    leaderboard: true,  // immer sichtbar — ESPN-Daten ohne Pool laden
     draft: inDraft,
     profile: !isGuest
   };
@@ -1235,10 +1304,28 @@ function renderProfile() {
   html += `<div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin:20px 0 8px">ABGESCHLOSSENE POOLS</div>`;
   html += `<div id="poolArchive" style="color:var(--text3);font-size:13px;font-style:italic">L&auml;dt...</div>`;
 
+  // Passwort setzen / ändern (für direkten Login ohne Magic Link)
+  html += `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:20px 0 0">
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">PASSWORT</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Setze ein Passwort, dann brauchst du keinen Magic Link mehr.</div>
+      <input class="input" type="password" id="newPasswordInput" placeholder="Min. 6 Zeichen" autocomplete="new-password" style="width:100%;padding:10px;font-size:13px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px">
+      <button class="btn btn-primary btn-block" onclick="setUserPassword()" style="padding:10px;font-size:13px">Passwort setzen / ändern</button>
+    </div>`;
+
   html += `<button onclick="doLogout()" style="width:100%;margin-top:24px;padding:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Abmelden</button>`;
 
   c.innerHTML = html;
   loadPoolArchive();
+}
+
+async function setUserPassword() {
+  const pw = document.getElementById('newPasswordInput').value;
+  if (!pw || pw.length < 6) { showToast('Passwort braucht min. 6 Zeichen'); return; }
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if (error) { showToast('Fehler: ' + error.message); return; }
+  document.getElementById('newPasswordInput').value = '';
+  showToast('Passwort gespeichert ✓');
 }
 
 async function loadPoolArchive() {
@@ -2117,7 +2204,7 @@ async function initApp() {
   fetchLiveScores();
 
   updateTabs();
-  const defaultTab = S.activePool ? 'leaderboard' : (S.isGuest ? 'leaderboard' : 'profile');
+  const defaultTab = 'leaderboard';  // immer auf Leaderboard starten
   switchTab(defaultTab);
 }
 
