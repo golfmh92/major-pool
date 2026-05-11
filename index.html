@@ -376,6 +376,7 @@ body::before{content:'';position:fixed;inset:0;background:
 </style>
 </head>
 <body>
+<div id="jsErrorBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#E63946;color:#fff;padding:14px 18px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2)"></div>
 <!-- Auth Screen -->
 <div id="authScreen" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);align-items:center;justify-content:center;padding:20px">
   <div style="width:100%;max-width:380px">
@@ -3435,7 +3436,9 @@ function renderPoolDraft(c) {
 
       // Auto-Modal: wenn dran und Modal nicht offen → öffnen (auch nach Scrollen)
       if (myTurn && !S.draftModalOpen && !S.userClosedDraftModal) {
-        setTimeout(() => openPoolDraftModal(), 50);
+        setTimeout(() => {
+          try { openPoolDraftModal(); } catch(e) { console.warn('[automodal]', e); }
+        }, 50);
       }
     }
   }
@@ -4089,6 +4092,20 @@ if (isRunningStandalone()) {
 }
 
 /* ===================== Start ===================== */
+// Globaler Fehler-Handler: bei JS-Crash sieht der User wenigstens etwas statt weißem Screen
+window.addEventListener('error', (e) => {
+  const banner = document.getElementById('jsErrorBanner');
+  if (banner) {
+    banner.style.display = 'block';
+    banner.textContent = '⚠️ ' + (e.message || 'Fehler') + ' (Tippe zum Neuladen)';
+    banner.onclick = () => location.reload();
+  }
+  console.error('[boot error]', e);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[boot promise]', e.reason);
+});
+
 (async function boot() {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
