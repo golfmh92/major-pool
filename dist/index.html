@@ -11,7 +11,24 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase JS Library mit CDN-Fallbacks (synchron via document.write damit boot() weiß dass es geladen ist) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+  if (typeof supabase === 'undefined') {
+    document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
+  }
+</script>
+<script>
+  if (typeof supabase === 'undefined') {
+    document.write('<script src="https://cdn.skypack.dev/@supabase/supabase-js@2"><\/script>');
+  }
+</script>
+<script>
+  if (typeof supabase === 'undefined') {
+    // Letzter Fallback: klare User-Meldung statt weißer Bildschirm
+    window.__supabaseLoadFailed = true;
+  }
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -878,6 +895,13 @@ const LIVE_REFRESH_MS = 20000; // 20 seconds when live
 const IDLE_REFRESH_MS = 600000; // 10 minutes when not playing
 
 /* ===================== Supabase ===================== */
+if (window.__supabaseLoadFailed || typeof supabase === 'undefined') {
+  // Klare User-Meldung statt weißer Bildschirm
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.innerHTML = '<div style="padding:40px 20px;text-align:center;font-family:-apple-system,sans-serif;max-width:480px;margin:40px auto"><div style="font-size:48px;margin-bottom:16px">🔌</div><h2 style="color:#E63946;margin-bottom:12px">Verbindungsproblem</h2><p style="color:#5a6070;line-height:1.6;font-size:14px">Die Supabase-Bibliothek konnte nicht geladen werden.<br>Möglicherweise blockiert dein Netzwerk, VPN, oder ein Ad-Blocker den CDN-Zugriff.</p><p style="color:#5a6070;font-size:13px;margin-top:14px;text-align:left;background:#f7f8fa;padding:14px;border-radius:10px">Was du probieren kannst:<br>• <strong>Anderes WLAN</strong> oder Mobilfunk<br>• VPN aus<br>• Browser-Erweiterungen (uBlock, Privacy Badger etc.) für diese Seite deaktivieren<br>• Anderen Browser testen</p><button onclick="location.reload()" style="margin-top:20px;padding:14px 28px;background:#1B3A5C;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Neu laden</button></div>';
+  });
+  throw new Error('Supabase JS library not loaded — see UI for instructions');
+}
 const sb = supabase.createClient('https://sagxezwnwsukmgqfjlci.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94');
 
 /* ===================== State ===================== */
