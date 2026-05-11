@@ -2253,6 +2253,11 @@ async function tickPickTimer() {
     if (c) renderPoolDraft(c);
   }
 
+  // Safety: wenn dran und Modal noch nicht offen → öffnen (Snake-Doppel-Turn Schutz)
+  if (isMyTurn() && !S.draftModalOpen && !S.userClosedDraftModal) {
+    try { openPoolDraftModal(); } catch(e) { console.warn('[tick automodal]', e); }
+  }
+
   if (remaining === 0 && !_autoPickInFlight) {
     // Drafter macht Auto-Pick sofort; alle anderen warten 2s, dann versuchen sie auch (race-safe via UNIQUE)
     const myTurn = isMyTurn();
@@ -3940,8 +3945,10 @@ async function pickGolfer(name) {
     S.activePool.current_pick_deadline = newDeadline;
   }
 
-  closeModal('modalDraftPick');
-  // Pick war programmatisch (nicht User-Cancel) → Auto-Modal bei Snake-Doppel-Turn wieder zulassen
+  // Programmatischer Close — KEIN Side-Effect auf userClosedDraftModal-Flag
+  // (closeModal() würde das Flag auf true setzen → Auto-Modal-Re-Open beim Snake-Doppel-Turn blockiert)
+  document.getElementById('modalDraftPick').classList.remove('open');
+  S.draftModalOpen = false;
   S.userClosedDraftModal = false;
   showToast(name + ' gedraftet!');
   render();
