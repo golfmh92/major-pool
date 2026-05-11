@@ -848,7 +848,8 @@ body::before{content:'';position:fixed;inset:0;background:
   <div class="modal">
     <div class="modal-handle"></div>
     <h3 style="font-family:var(--font-display);font-size:20px;color:var(--green);margin-bottom:16px">Pool erstellen</h3>
-    <input class="input" type="text" id="poolName" placeholder="Pool-Name (z.B. PGA Champ 2026)" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
+    <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Pool-Name <span style="color:var(--red,#c0392b)">*</span></label>
+    <input class="input" type="text" id="poolName" placeholder="z.B. Family Pool, Office Pool, Markus & Friends" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px">
 
     <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Turnier</label>
     <select id="poolTournamentId" style="width:100%;margin-bottom:10px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:14px"></select>
@@ -1201,13 +1202,12 @@ async function loadTournamentsForCreate() {
 
 async function openCreatePoolModal() {
   await loadTournamentsForCreate();
-  // Auto-Pool-Name aus gewähltem Turnier
-  const sel = document.getElementById('poolTournamentId');
+  // Pool-Name nicht mehr auto-füllen — User soll selbst einen vergebbaren Namen wählen,
+  // damit später bei mehreren Pools fürs gleiche Turnier eindeutig unterscheidbar.
   const nameInput = document.getElementById('poolName');
-  if (sel && nameInput && !nameInput.value && sel.selectedOptions[0]) {
-    nameInput.value = sel.selectedOptions[0].dataset.name + ' Pool';
-  }
+  if (nameInput) nameInput.value = '';
   openModal('modalCreatePool');
+  setTimeout(() => nameInput?.focus(), 150);
 }
 
 async function createPool() {
