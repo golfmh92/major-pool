@@ -11,24 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- Supabase JS Library mit CDN-Fallbacks (synchron via document.write damit boot() weiß dass es geladen ist) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>
-  if (typeof supabase === 'undefined') {
-    document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\/script>');
-  }
-</script>
-<script>
-  if (typeof supabase === 'undefined') {
-    document.write('<script src="https://cdn.skypack.dev/@supabase/supabase-js@2"><\/script>');
-  }
-</script>
-<script>
-  if (typeof supabase === 'undefined') {
-    // Letzter Fallback: klare User-Meldung statt weißer Bildschirm
-    window.__supabaseLoadFailed = true;
-  }
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -393,7 +376,6 @@ body::before{content:'';position:fixed;inset:0;background:
 </style>
 </head>
 <body>
-<div id="jsErrorBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#E63946;color:#fff;padding:14px 18px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2)"></div>
 <!-- Auth Screen -->
 <div id="authScreen" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);align-items:center;justify-content:center;padding:20px">
   <div style="width:100%;max-width:380px">
@@ -895,13 +877,6 @@ const LIVE_REFRESH_MS = 20000; // 20 seconds when live
 const IDLE_REFRESH_MS = 600000; // 10 minutes when not playing
 
 /* ===================== Supabase ===================== */
-if (window.__supabaseLoadFailed || typeof supabase === 'undefined') {
-  // Klare User-Meldung statt weißer Bildschirm
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.innerHTML = '<div style="padding:40px 20px;text-align:center;font-family:-apple-system,sans-serif;max-width:480px;margin:40px auto"><div style="font-size:48px;margin-bottom:16px">🔌</div><h2 style="color:#E63946;margin-bottom:12px">Verbindungsproblem</h2><p style="color:#5a6070;line-height:1.6;font-size:14px">Die Supabase-Bibliothek konnte nicht geladen werden.<br>Möglicherweise blockiert dein Netzwerk, VPN, oder ein Ad-Blocker den CDN-Zugriff.</p><p style="color:#5a6070;font-size:13px;margin-top:14px;text-align:left;background:#f7f8fa;padding:14px;border-radius:10px">Was du probieren kannst:<br>• <strong>Anderes WLAN</strong> oder Mobilfunk<br>• VPN aus<br>• Browser-Erweiterungen (uBlock, Privacy Badger etc.) für diese Seite deaktivieren<br>• Anderen Browser testen</p><button onclick="location.reload()" style="margin-top:20px;padding:14px 28px;background:#1B3A5C;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Neu laden</button></div>';
-  });
-  throw new Error('Supabase JS library not loaded — see UI for instructions');
-}
 const sb = supabase.createClient('https://sagxezwnwsukmgqfjlci.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94');
 
 /* ===================== State ===================== */
@@ -953,27 +928,11 @@ let S = {
 let currentUser = null;
 
 function showAuthError(msg) {
-  // Deutsche Übersetzung gängiger Supabase-Fehler
-  const translations = {
-    'Invalid login credentials': 'E-Mail oder Passwort falsch',
-    'Email not confirmed': 'E-Mail noch nicht bestätigt — check dein Postfach',
-    'User already registered': 'Konto existiert schon — bitte über "Anmelden"',
-    'Password should be at least 6 characters': 'Passwort braucht min. 6 Zeichen',
-    'Unable to validate email address: invalid format': 'E-Mail-Adresse ist ungültig',
-    'Email rate limit exceeded': 'Zu viele Versuche — bitte ein paar Minuten warten',
-  };
-  const friendly = translations[msg] || msg;
   const el = document.getElementById('authError');
-  el.innerHTML = '⚠️ <strong>' + friendly + '</strong>';
+  el.textContent = msg;
   el.style.display = '';
-  el.style.background = 'rgba(230,57,70,0.12)';
-  el.style.color = '#E63946';
-  el.style.padding = '14px 16px';
-  el.style.borderRadius = '10px';
-  el.style.fontSize = '14px';
-  el.style.border = '1px solid rgba(230,57,70,0.3)';
-  // In Sicht scrollen falls user runter ist
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.style.background = 'var(--red-bg)';
+  el.style.color = 'var(--red)';
 }
 
 function resetAuthForm() {
@@ -1012,76 +971,17 @@ function switchAuthMode(mode) {
   document.getElementById('authError').style.display = 'none';
 }
 
-// Direct fetch-basierter Login — bypassed supabase-js falls das hängt
-const SB_URL = 'https://sagxezwnwsukmgqfjlci.supabase.co';
-const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94';
-
-async function directLogin(email, password) {
-  console.log('[directLogin] fetch start');
-  const resp = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
-    method: 'POST',
-    headers: { 'apikey': SB_ANON, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  });
-  console.log('[directLogin] fetch done, status', resp.status);
-  const body = await resp.json();
-  if (!resp.ok) {
-    const msg = body.error_description || body.msg || body.message || 'Login fehlgeschlagen';
-    return { error: { message: msg } };
-  }
-  // Session direkt in localStorage schreiben (supabase-js Format) — KEIN sb.auth.setSession (hängt!)
-  const sessionData = {
-    access_token: body.access_token,
-    refresh_token: body.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + (body.expires_in || 3600),
-    expires_in: body.expires_in || 3600,
-    token_type: body.token_type || 'bearer',
-    user: body.user
-  };
-  try {
-    localStorage.setItem('sb-sagxezwnwsukmgqfjlci-auth-token', JSON.stringify(sessionData));
-  } catch (e) { console.warn('[directLogin] localStorage failed', e); }
-  // setSession parallel im Hintergrund versuchen — falls hängt, egal
-  sb.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token })
-    .catch(e => console.warn('[directLogin] setSession bg failed', e));
-  return { data: { session: sessionData, user: body.user } };
-}
-
 async function doPasswordLogin() {
-  console.log('[login] click → doPasswordLogin');
   const email = document.getElementById('passLoginEmail').value.trim().toLowerCase();
   const pass = document.getElementById('passLoginPassword').value;
   if (!email || !pass) { showAuthError('E-Mail und Passwort eingeben'); return; }
   document.getElementById('authError').style.display = 'none';
-
-  const btn = document.querySelector('#authPass button[onclick="doPasswordLogin()"]');
-  const origText = btn?.textContent || 'Einloggen';
-  if (btn) { btn.disabled = true; btn.textContent = 'Anmelden…'; btn.style.opacity = '0.7'; }
-
-  try {
-    const { data, error } = await Promise.race([
-      directLogin(email, pass),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Verbindung dauerte zu lange')), 8000))
-    ]);
-    console.log('[login] result', { hasUser: !!data?.user, error });
-    if (error) { showAuthError(error.message); return; }
-    if (data?.user) {
-      // Session ist in localStorage. Reload statt onAuthSuccess (das hängt wegen
-      // verklemmtem supabase-js nach Session-Manipulation). Beim Reload startet
-      // alles frisch und Boot findet die Session.
-      console.log('[login] success → reload');
-      location.reload();
-      return;
-    }
-  } catch (e) {
-    showAuthError(e.message || 'Login fehlgeschlagen');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = origText; btn.style.opacity = ''; }
-  }
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { showAuthError(error.message); return; }
+  // onAuthStateChange erledigt den Rest (onAuthSuccess)
 }
 
 async function doRegister() {
-  console.log('[register] click → doRegister');
   const name = document.getElementById('regName').value.trim();
   const email = document.getElementById('regEmail').value.trim().toLowerCase();
   const pass = document.getElementById('regPassword').value;
@@ -1090,39 +990,24 @@ async function doRegister() {
   if (!pass || pass.length < 6) { showAuthError('Passwort braucht min. 6 Zeichen'); return; }
   document.getElementById('authError').style.display = 'none';
 
-  const btn = document.querySelector('#authRegister button[onclick="doRegister()"]');
-  const origText = btn?.textContent || 'Konto erstellen';
-  if (btn) { btn.disabled = true; btn.textContent = 'Lege Konto an…'; btn.style.opacity = '0.7'; }
-
   // Name für public.users-Profile in onAuthSuccess Fallback
   sessionStorage.setItem('pgaPool_pendingName', name);
 
-  try {
-    const { data, error } = await Promise.race([
-      sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: window.location.href } }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Verbindung dauerte zu lange')), 8000))
-    ]);
-    console.log('[register] result', { hasSession: !!data?.session, error });
-    if (error) { showAuthError(error.message); return; }
-    // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
-    // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
-    if (data?.session?.user) {
-      // Session ist gesetzt → reload für frischen Start
-      console.log('[register] success → reload');
-      // Pending Name in localStorage damit onAuthSuccess das Profil mit echtem Name anlegt
-      localStorage.setItem('pgaPool_pendingName', name);
-      location.reload();
-      return;
-    } else {
-      document.getElementById('sentEmail').textContent = email;
-      document.getElementById('authPass').style.display = 'none';
-      document.getElementById('authRegister').style.display = 'none';
-      document.getElementById('authMagicSent').style.display = '';
-    }
-  } catch (e) {
-    showAuthError(e.message || 'Registrierung fehlgeschlagen');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = origText; btn.style.opacity = ''; }
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: pass,
+    options: { data: { name }, emailRedirectTo: window.location.href }
+  });
+  if (error) { showAuthError(error.message); return; }
+  // Bei Confirm-Email=OFF (siehe Supabase Auth Settings) sind wir direkt eingeloggt.
+  // Bei Confirm-Email=ON: User bekommt Bestätigungs-Mail, signIn erst nach Klick.
+  if (data.session) {
+    // direkt eingeloggt → onAuthStateChange läuft
+  } else {
+    document.getElementById('sentEmail').textContent = email;
+    document.getElementById('authPass').style.display = 'none';
+    document.getElementById('authRegister').style.display = 'none';
+    document.getElementById('authMagicSent').style.display = '';
   }
 }
 
@@ -1184,7 +1069,7 @@ async function onAuthSuccess(user) {
   if (profErr) console.warn('[auth] profile load error', profErr);
   // Falls users-Zeile fehlt (Erstanmeldung via Magic Link), automatisch anlegen
   if (!profile) {
-    const pendingName = localStorage.getItem('pgaPool_pendingName') || sessionStorage.getItem('pgaPool_pendingName');
+    const pendingName = sessionStorage.getItem('pgaPool_pendingName');
     const fallbackName = pendingName || user.user_metadata?.name || (user.email || '').split('@')[0] || 'User';
     const initials = fallbackName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     const { data: inserted, error: insErr } = await sb.from('users')
@@ -1192,7 +1077,6 @@ async function onAuthSuccess(user) {
       .select().single();
     if (insErr) console.warn('[auth] auto-create users row failed', insErr);
     profile = inserted;
-    localStorage.removeItem('pgaPool_pendingName');
     sessionStorage.removeItem('pgaPool_pendingName');
   }
   S.userProfile = profile;
@@ -3551,9 +3435,7 @@ function renderPoolDraft(c) {
 
       // Auto-Modal: wenn dran und Modal nicht offen → öffnen (auch nach Scrollen)
       if (myTurn && !S.draftModalOpen && !S.userClosedDraftModal) {
-        setTimeout(() => {
-          try { openPoolDraftModal(); } catch(e) { console.warn('[automodal]', e); }
-        }, 50);
+        setTimeout(() => openPoolDraftModal(), 50);
       }
     }
   }
@@ -4207,20 +4089,6 @@ if (isRunningStandalone()) {
 }
 
 /* ===================== Start ===================== */
-// Globaler Fehler-Handler: bei JS-Crash sieht der User wenigstens etwas statt weißem Screen
-window.addEventListener('error', (e) => {
-  const banner = document.getElementById('jsErrorBanner');
-  if (banner) {
-    banner.style.display = 'block';
-    banner.textContent = '⚠️ ' + (e.message || 'Fehler') + ' (Tippe zum Neuladen)';
-    banner.onclick = () => location.reload();
-  }
-  console.error('[boot error]', e);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  console.error('[boot promise]', e.reason);
-});
-
 (async function boot() {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
@@ -4239,54 +4107,16 @@ window.addEventListener('unhandledrejection', (e) => {
       return;
     }
     if (event === 'SIGNED_IN' && session?.user) {
-      try { await onAuthSuccess(session.user); } catch (e) { console.error('[onAuthSuccess]', e); showAuthScreen(); }
+      await onAuthSuccess(session.user);
     }
   });
 
-  // Watchdog: wenn nach 6s weder app noch authScreen visible sind, fallback auf Auth-Screen
-  const watchdog = setTimeout(() => {
-    const appEl = document.getElementById('app');
-    const authEl = document.getElementById('authScreen');
-    if (appEl?.style.display === 'none' && authEl?.style.display !== 'flex') {
-      console.warn('[boot watchdog] no screen visible after 6s, forcing auth screen');
-      try { localStorage.clear(); } catch(e) {}
-      try { sessionStorage.clear(); } catch(e) {}
-      authEl.style.display = 'flex';
-      const banner = document.getElementById('jsErrorBanner');
-      if (banner) {
-        banner.style.display = 'block';
-        banner.textContent = '⚠️ Session-Reset durchgeführt — bitte neu anmelden';
-        banner.onclick = () => location.reload();
-      }
-    }
-  }, 6000);
-
-  try {
-    const { data: { session }, error: sessionErr } = await Promise.race([
-      sb.auth.getSession(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('getSession timeout')), 1500))
-    ]);
-    if (sessionErr) console.warn('[boot] session error', sessionErr);
-    if (session?.user) {
-      try {
-        await Promise.race([
-          onAuthSuccess(session.user),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('onAuthSuccess timeout')), 4000))
-        ]);
-      } catch (e) {
-        console.warn('[boot] onAuthSuccess failed, showing auth screen', e);
-        document.getElementById('authScreen').style.display = 'flex';
-      }
-    } else {
-      document.getElementById('authScreen').style.display = 'flex';
-    }
-  } catch (e) {
-    // getSession hat getimeoutet — Session-Token vermutlich korrupt → localStorage clearen
-    console.warn('[boot] session check failed, clearing localStorage', e);
-    try { localStorage.removeItem('sb-sagxezwnwsukmgqfjlci-auth-token'); } catch(err) {}
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await onAuthSuccess(session.user);
+  } else {
     document.getElementById('authScreen').style.display = 'flex';
   }
-  clearTimeout(watchdog);
   startLiveRefresh();
   if (typeof initServiceWorker === 'function') initServiceWorker();
 
