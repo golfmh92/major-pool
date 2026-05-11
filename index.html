@@ -4095,23 +4095,6 @@ if (new URLSearchParams(location.search).has('reset')) {
   history.replaceState({}, '', location.pathname);
 }
 
-// Watchdog: wenn nach 3s weder app noch authScreen visible → Auth-Screen forcieren
-// (kein localStorage clear — User entscheidet selbst)
-setTimeout(() => {
-  const app = document.getElementById('app');
-  const auth = document.getElementById('authScreen');
-  if (app?.style.display === 'none' && auth?.style.display !== 'flex') {
-    console.warn('[watchdog] no screen visible after 3s — forcing auth');
-    auth.style.display = 'flex';
-    // Reset-Hint anzeigen
-    const hint = document.createElement('div');
-    hint.style.cssText = 'position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;z-index:10000;font-family:-apple-system,sans-serif';
-    hint.textContent = '🔄 Reset (Login-Daten löschen)';
-    hint.onclick = () => { localStorage.clear(); sessionStorage.clear(); location.reload(); };
-    document.body.appendChild(hint);
-  }
-}, 3000);
-
 (async function boot() {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
