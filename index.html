@@ -1381,6 +1381,7 @@ function renderProfile() {
       <button class="btn btn-primary btn-block" onclick="showInviteLink(S.activePool)" style="margin-top:10px;padding:10px;font-size:13px">Einladungslink teilen</button>
       <button class="btn btn-secondary btn-block" onclick="sharePoolResult()" style="margin-top:6px;padding:10px;font-size:13px">Ergebnis teilen</button>
       ${isPoolAdmin && S.activePool.status === 'active' ? `<button class="btn btn-secondary btn-block" onclick="if(confirm('Pool wirklich abschlie&szlig;en?'))finishPool()" style="margin-top:6px;padding:10px;font-size:13px">Pool jetzt abschlie&szlig;en</button>` : ''}
+      ${isPoolAdmin ? `<button class="btn btn-block" onclick="deletePool()" style="margin-top:6px;padding:10px;font-size:13px;background:none;border:1px solid var(--red);color:var(--red)">🗑️ Pool löschen</button>` : ''}
     </div>`;
   } else {
     html += `<div style="text-align:center;padding:20px 0">
@@ -3470,6 +3471,13 @@ function renderPoolDraft(c) {
     }
   }
 
+  // Admin: Pool löschen (auch während Draft, falls was schiefgeht)
+  if (isAdmin) {
+    html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+      <button onclick="deletePool()" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:8px 16px">🗑️ Pool löschen</button>
+    </div>`;
+  }
+
   c.innerHTML = html;
 }
 
@@ -3523,6 +3531,9 @@ function renderPoolLobby(c, pool, isAdmin) {
       <div style="margin-top:18px;display:flex;flex-direction:column;gap:8px">
         <button class="btn btn-secondary btn-block" onclick="shuffleDraftOrder()" ${joined < 2 ? 'disabled' : ''} style="padding:12px">🎲 Reihenfolge auslosen</button>
         <button class="btn btn-primary btn-block" onclick="startLiveDraft()" ${!canStart ? 'disabled' : ''} style="padding:14px;font-size:15px">🏌️ Draft starten ${canStart ? '' : '(min. 2 Mitspieler)'}</button>
+      </div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <button onclick="deletePool()" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:8px 16px">🗑️ Pool löschen</button>
       </div>
     `;
   } else {
