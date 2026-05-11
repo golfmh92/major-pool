@@ -924,7 +924,14 @@ const LIVE_REFRESH_MS = 20000; // 20 seconds when live
 const IDLE_REFRESH_MS = 600000; // 10 minutes when not playing
 
 /* ===================== Supabase ===================== */
-const sb = supabase.createClient('https://sagxezwnwsukmgqfjlci.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94');
+// flowType: 'implicit' — Recovery-Link funktioniert device/browser-übergreifend (Hash-basiert).
+// Default 'pkce' würde verlangen, dass der code_verifier aus localStorage desselben Browsers
+// kommt, in dem der Reset angefordert wurde — bricht den Flow, wenn Mail auf anderem Gerät geöffnet.
+const sb = supabase.createClient(
+  'https://sagxezwnwsukmgqfjlci.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94',
+  { auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true } }
+);
 
 /* ===================== State ===================== */
 let S = {
@@ -4653,17 +4660,31 @@ if (new URLSearchParams(location.search).has('reset')) {
   // App-Container bleibt versteckt bis initApp den richtigen Tab gesetzt hat → kein Flash
   document.getElementById('app').style.display = 'none';
 
+  // Recovery-Link aus URL erkennen (Hash bei implicit flow, Query bei PKCE-Fallback).
+  // Wird oben gesetzt damit SIGNED_IN nicht in die App durchfällt.
+  const hashStr = window.location.hash || '';
+  const searchStr = window.location.search || '';
+  const isRecoveryLink =
+    /[#&?]type=recovery(?:$|&)/.test(hashStr) ||
+    /[?&]type=recovery(?:$|&)/.test(searchStr);
+
+  function showNewPasswordScreen() {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('authMagic').style.display = 'none';
+    document.getElementById('authPass').style.display = 'none';
+    document.getElementById('authRegister').style.display = 'none';
+    document.getElementById('authMagicSent').style.display = 'none';
+    document.getElementById('authNewPassword').style.display = '';
+  }
+
+  if (isRecoveryLink) showNewPasswordScreen();
+
   // Auth-Callback (Magic Link / Recovery / Login)
   sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
+    if (event === 'PASSWORD_RECOVERY' || (isRecoveryLink && event === 'SIGNED_IN')) {
       // User hat den "Passwort vergessen"-Link geklickt → "Neues Passwort"-Dialog zeigen
-      document.getElementById('authScreen').style.display = 'flex';
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('authMagic').style.display = 'none';
-      document.getElementById('authPass').style.display = 'none';
-      document.getElementById('authRegister').style.display = 'none';
-      document.getElementById('authMagicSent').style.display = 'none';
-      document.getElementById('authNewPassword').style.display = '';
+      showNewPasswordScreen();
       return;
     }
     if (event === 'SIGNED_IN' && session?.user) {
@@ -4672,11 +4693,12 @@ if (new URLSearchParams(location.search).has('reset')) {
   });
 
   const { data: { session } } = await sb.auth.getSession();
-  if (session) {
+  if (session && !isRecoveryLink) {
     await onAuthSuccess(session.user);
-  } else {
+  } else if (!isRecoveryLink) {
     document.getElementById('authScreen').style.display = 'flex';
   }
+  // bei isRecoveryLink: showNewPasswordScreen() ist oben schon aktiv
   startLiveRefresh();
   if (typeof initServiceWorker === 'function') initServiceWorker();
 
