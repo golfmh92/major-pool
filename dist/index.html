@@ -4148,16 +4148,52 @@ window.addEventListener('unhandledrejection', (e) => {
       return;
     }
     if (event === 'SIGNED_IN' && session?.user) {
-      await onAuthSuccess(session.user);
+      try { await onAuthSuccess(session.user); } catch (e) { console.error('[onAuthSuccess]', e); showAuthScreen(); }
     }
   });
 
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await onAuthSuccess(session.user);
-  } else {
+  // Watchdog: wenn nach 6s weder app noch authScreen visible sind, fallback auf Auth-Screen
+  const watchdog = setTimeout(() => {
+    const appEl = document.getElementById('app');
+    const authEl = document.getElementById('authScreen');
+    if (appEl?.style.display === 'none' && authEl?.style.display !== 'flex') {
+      console.warn('[boot watchdog] no screen visible after 6s, forcing auth screen');
+      try { localStorage.clear(); } catch(e) {}
+      try { sessionStorage.clear(); } catch(e) {}
+      authEl.style.display = 'flex';
+      const banner = document.getElementById('jsErrorBanner');
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = '⚠️ Session-Reset durchgeführt — bitte neu anmelden';
+        banner.onclick = () => location.reload();
+      }
+    }
+  }, 6000);
+
+  try {
+    const { data: { session }, error: sessionErr } = await Promise.race([
+      sb.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('getSession timeout')), 5000))
+    ]);
+    if (sessionErr) console.warn('[boot] session error', sessionErr);
+    if (session?.user) {
+      try {
+        await Promise.race([
+          onAuthSuccess(session.user),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('onAuthSuccess timeout')), 5000))
+        ]);
+      } catch (e) {
+        console.warn('[boot] onAuthSuccess failed, showing auth screen', e);
+        document.getElementById('authScreen').style.display = 'flex';
+      }
+    } else {
+      document.getElementById('authScreen').style.display = 'flex';
+    }
+  } catch (e) {
+    console.warn('[boot] session check failed', e);
     document.getElementById('authScreen').style.display = 'flex';
   }
+  clearTimeout(watchdog);
   startLiveRefresh();
   if (typeof initServiceWorker === 'function') initServiceWorker();
 
