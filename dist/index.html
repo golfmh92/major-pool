@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="PGA Pool">
+<meta name="apple-mobile-web-app-title" content="Major Pool">
 <meta name="theme-color" content="#1B3A5C">
-<title>PGA Pool</title>
-<!-- Favicon (inline SVG) — Navy Box mit PP Monogram + Red Accent -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231B3A5C'/%3E%3Ctext x='32' y='44' font-family='Impact,Arial Black,sans-serif' font-size='34' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-2'%3EPP%3C/text%3E%3Crect x='22' y='50' width='20' height='3' rx='1.5' fill='%23E63946'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='34' fill='%231B3A5C'/%3E%3Ctext x='90' y='105' font-family='Impact,Arial Black,sans-serif' font-size='62' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-3'%3EPGA%3C/text%3E%3Ctext x='90' y='150' font-family='Impact,Arial Black,sans-serif' font-size='38' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-2'%3EPOOL%3C/text%3E%3Crect x='40' y='28' width='100' height='4' rx='2' fill='%23E63946'/%3E%3C/svg%3E">
+<title>Major Pool</title>
+<!-- Favicon (inline SVG) — Navy Box mit MP Monogram + Red Accent -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231B3A5C'/%3E%3Ctext x='32' y='44' font-family='Impact,Arial Black,sans-serif' font-size='30' font-weight='900' fill='white' text-anchor='middle' letter-spacing='-1.5'%3EMP%3C/text%3E%3Crect x='20' y='50' width='24' height='3' rx='1.5' fill='%23E63946'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -385,9 +386,8 @@ body::before{content:'';position:fixed;inset:0;background:
   <div style="width:100%;max-width:380px">
     <!-- Header / Logo -->
     <div style="text-align:center;margin-bottom:32px;line-height:1">
-      <div style="font-family:var(--font-display);font-size:13px;letter-spacing:6px;color:var(--red);margin-bottom:6px">★ MAJOR SEASON ★</div>
-      <div style="font-family:'Anton',Impact,sans-serif;font-size:42px;letter-spacing:4px;color:var(--green)">PGA POOL</div>
-      <div style="font-family:'Inter',sans-serif;font-size:10px;letter-spacing:4px;color:var(--text2);font-weight:600;margin-top:6px">DRAFT · WATCH · WIN</div>
+      <div style="font-family:'Anton',Impact,sans-serif;font-size:42px;letter-spacing:4px;color:var(--green)">MAJOR POOL</div>
+      <div style="font-family:'Inter',sans-serif;font-size:10px;letter-spacing:4px;color:var(--text2);font-weight:600;margin-top:8px">DRAFT · WATCH · WIN</div>
     </div>
 
     <!-- Mode Toggle: Anmelden vs Registrieren -->
@@ -452,9 +452,8 @@ body::before{content:'';position:fixed;inset:0;background:
     <div class="header-avatar" id="avatarBtn" style="display:none">
       <span id="avatarText">?</span>
     </div>
-    <div class="header-top">★ MAJOR SEASON ★</div>
-    <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">PGA POOL</div>
-    <div class="header-sub" id="headerSub">DRAFT · WATCH · WIN</div>
+    <div class="header-title" id="headerTitle" onclick="const v=document.querySelector('.view.active');if(v)v.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer">MAJOR POOL</div>
+    <div class="header-sub" id="headerSub"></div>
     <div class="live-badge stale" id="liveBadge" style="display:none"><div class="live-dot"></div><span id="liveText">Live</span></div>
     <button class="header-admin" id="btnPush" style="right:16px;display:none" onclick="togglePushDropdown()">
       <svg viewBox="0 0 24 24" id="pushIcon"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -519,7 +518,7 @@ body::before{content:'';position:fixed;inset:0;background:
       <div style="font-size:40px;margin-bottom:8px">📱</div>
       <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Für ein besseres Erlebnis</div>
       <div style="font-family:var(--font-display);font-size:24px;color:var(--text)">Wie eine native App</div>
-      <div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.5">Füge den PGA Pool zum Home-Bildschirm hinzu — so startet die App ohne Browser-Leiste, genau wie eine echte App.</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.5">Füge Major Pool zum Home-Bildschirm hinzu — so startet die App ohne Browser-Leiste, genau wie eine echte App.</div>
     </div>
     <!-- Platform Tabs -->
     <div style="display:flex;gap:0;background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);margin:18px 0 20px">
@@ -4270,6 +4269,19 @@ function switchTab(mainTab) {
 }
 
 function render() {
+  // Header-Sub: aktuelles Turnier + Venue
+  const hSub = document.getElementById('headerSub');
+  if (hSub) {
+    if (S.tournament) {
+      const venue = S.tournament.venue ? ' · ' + S.tournament.venue : '';
+      hSub.textContent = S.tournament.name + venue;
+    } else if (S.liveEventName) {
+      hSub.textContent = S.liveEventName;
+    } else {
+      hSub.textContent = '';
+    }
+  }
+
   const main = S.activeTab;
   const sub = (S.subTab && S.subTab[main]) || main;
   // Sub-Tab-Bar wird in den jeweiligen Render-Funktionen oben eingebaut
