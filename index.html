@@ -1012,6 +1012,26 @@ function switchAuthMode(mode) {
   document.getElementById('authError').style.display = 'none';
 }
 
+// Direct fetch-basierter Login — bypassed supabase-js falls das hängt
+const SB_URL = 'https://sagxezwnwsukmgqfjlci.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhZ3hlendud3N1a21ncWZqbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNDk5MTIsImV4cCI6MjA5MTgyNTkxMn0.0DSywYy6hli0kDmb7ZPspBGegsOK4NM8F7LyQBeOi94';
+
+async function directLogin(email, password) {
+  const resp = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
+    method: 'POST',
+    headers: { 'apikey': SB_ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const body = await resp.json();
+  if (!resp.ok) {
+    const msg = body.error_description || body.msg || body.message || 'Login fehlgeschlagen';
+    return { error: { message: msg } };
+  }
+  // Session manuell in Supabase-Client laden
+  await sb.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
+  return { data: { session: body, user: body.user } };
+}
+
 async function doPasswordLogin() {
   console.log('[login] click → doPasswordLogin');
   const email = document.getElementById('passLoginEmail').value.trim().toLowerCase();
@@ -1019,31 +1039,27 @@ async function doPasswordLogin() {
   if (!email || !pass) { showAuthError('E-Mail und Passwort eingeben'); return; }
   document.getElementById('authError').style.display = 'none';
 
-  // Button-Feedback (Loading State)
   const btn = document.querySelector('#authPass button[onclick="doPasswordLogin()"]');
   const origText = btn?.textContent || 'Einloggen';
   if (btn) { btn.disabled = true; btn.textContent = 'Anmelden…'; btn.style.opacity = '0.7'; }
 
   try {
     const { data, error } = await Promise.race([
-      sb.auth.signInWithPassword({ email, password: pass }),
+      directLogin(email, pass),
       new Promise((_, rej) => setTimeout(() => rej(new Error('Verbindung dauerte zu lange')), 8000))
     ]);
-    console.log('[login] result', { hasData: !!data?.session, error });
+    console.log('[login] result', { hasUser: !!data?.user, error });
     if (error) { showAuthError(error.message); return; }
-    if (data?.session?.user) {
-      // signInWithPassword hat erfolgreich Session erstellt — onAuthStateChange läuft parallel,
-      // wir rufen aber trotzdem direkt onAuthSuccess auf damit's nicht "hängt" wenn der Event verschluckt wird
+    if (data?.user) {
       try {
         await Promise.race([
-          onAuthSuccess(data.session.user),
+          onAuthSuccess(data.user),
           new Promise((_, rej) => setTimeout(() => rej(new Error('Profile-Load timeout')), 5000))
         ]);
       } catch (e) {
-        console.warn('[login] onAuthSuccess hung, retry', e);
-        // Fallback: direkt UI umschalten — initApp wird im Hintergrund nachladen
-        currentUser = data.session.user;
-        S.userId = data.session.user.id;
+        console.warn('[login] onAuthSuccess hung, fallback UI', e);
+        currentUser = data.user;
+        S.userId = data.user.id;
         S.isGuest = false;
         document.getElementById('authScreen').style.display = 'none';
         document.getElementById('app').style.display = '';
