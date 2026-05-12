@@ -319,9 +319,12 @@ body::before{content:'';position:fixed;inset:0;background:
 
 /* ===== FAB ===== */
 .fab{position:absolute;bottom:calc(var(--tab-h) + var(--safe-bottom) + 20px);right:20px;width:52px;height:52px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 20px rgba(0,103,71,.3);z-index:50;transition:transform .2s;border:none;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:0}
-.fab.pill{width:auto;height:48px;border-radius:24px;padding:0 18px;animation:fabPulse 1.6s ease-in-out infinite}
+.fab.pill{width:auto;height:48px;border-radius:24px;padding:0 18px;animation:fabPulse 1.4s ease-in-out infinite}
 .fab.pill svg{width:18px;height:18px}
-@keyframes fabPulse{0%,100%{box-shadow:0 4px 20px rgba(0,103,71,.35)}50%{box-shadow:0 4px 28px rgba(0,103,71,.65)}}
+@keyframes fabPulse{
+  0%,100%{box-shadow:0 4px 20px rgba(0,103,71,.35), 0 0 0 0 rgba(0,103,71,.55);transform:scale(1)}
+  50%{box-shadow:0 6px 30px rgba(0,103,71,.7), 0 0 0 14px rgba(0,103,71,0);transform:scale(1.05)}
+}
 .fab:active{transform:scale(.9)}
 .fab svg{width:24px;height:24px;stroke:#fff;stroke-width:2.5;fill:none}
 
@@ -4219,6 +4222,10 @@ function showPoolStartedModal() {
 
 function openPoolDraftModal() {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+  // Hardstop falls Draft inzwischen fertig — sonst kann ein verzögertes Realtime-Event
+  // oder ein FAB-Klick das Modal nochmal öffnen, obwohl getCurrentDrafter() null ist.
+  const maxRounds = (S.activePool && S.activePool.picks_per_member) || 4;
+  if (S.poolPicks.length >= maxRounds * S.poolMembers.length) return;
   S.draftModalOpen = true;
   S.userClosedDraftModal = false;
   document.getElementById('inputGolferName').value = '';
@@ -4397,6 +4404,9 @@ function render() {
   } else if (main === 'draft') {
     renderDraftTab();
   }
+  // FAB-Sichtbarkeit nach jedem Render aktualisieren — sonst bleibt der
+  // "Weiterpicken"-Button stehen, obwohl man nicht mehr dran ist.
+  updateFab();
 }
 
 function updateFab() {
