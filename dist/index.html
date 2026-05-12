@@ -4299,8 +4299,7 @@ async function pickGolfer(name) {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
   const current = getCurrentDrafter();
   if (!current) { showToast('Draft ist bereits abgeschlossen'); return; }
-  const maxRounds = S.activePool.picks_per_member || 4;
-  if (S.poolPicks.length >= maxRounds * S.poolMembers.length) {
+  if (S.poolPicks.length >= (S.activePool.picks_per_member || 4) * S.poolMembers.length) {
     showToast('Draft ist bereits abgeschlossen'); return;
   }
   if (S.poolPicks.some(p => p.golfer_name.toLowerCase() === name.toLowerCase())) {
