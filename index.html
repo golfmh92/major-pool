@@ -2377,14 +2377,28 @@ function subscribeDraftRealtime() {
       S.poolPicks.push(payload.new);
       const member = S.poolMembers.find(m => m.id === payload.new.member_id);
       if (member) showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
-      // Deadline frisch aus DB holen — pools-UPDATE-Event kann mit Verzögerung
-      // ankommen, sonst tickt der Timer mit alter Deadline für den neuen Drafter weiter.
-      const { data: poolRow } = await sb.from('pools')
-        .select('status,current_pick_deadline')
-        .eq('id', S.activePool.id)
-        .maybeSingle();
-      if (poolRow) Object.assign(S.activePool, poolRow);
+      // Race-Fix: pickGolfer schreibt erst INSERT pool_picks, DANN UPDATE
+      // pools.current_pick_deadline. Wenn wir die Deadline jetzt sofort aus DB
+      // holen, kann der alte Wert zurückkommen — die Folge waren Auto-Pick-
+      // Storms, weil alle anderen Clients sofort "overdue" sahen.
+      // Lösung: deadline lokal pausieren + Auto-Pick-Cooldown setzen, und auf
+      // das pools-UPDATE-Realtime-Event warten (kommt direkt danach). Falls
+      // das Event verloren geht: Fallback-Fetch nach 3s.
+      S.activePool.current_pick_deadline = null;
+      S._lastPickInsertAt = Date.now();
       _lastRemainingShown = -1;
+      setTimeout(async () => {
+        if (!S.activePool || S.activePool.current_pick_deadline) return;
+        const { data: poolRow } = await sb.from('pools')
+          .select('status,current_pick_deadline')
+          .eq('id', S.activePool.id)
+          .maybeSingle();
+        if (poolRow?.current_pick_deadline) {
+          Object.assign(S.activePool, poolRow);
+          _lastRemainingShown = -1;
+          render();
+        }
+      }, 3000);
       // Drafter wechselt → "Modal vom User geschlossen"-Flag reset für nächsten Turn
       S.userClosedDraftModal = false;
       // Pending Pick verwerfen falls noch offen (z.B. ein anderer war schneller)
@@ -2542,6 +2556,10 @@ async function tickPickTimer() {
   }
 
   if (remaining === 0 && !_autoPickInFlight) {
+    // Cooldown nach jedem gerade eingelaufenen Pick: 4 Sekunden lang KEIN
+    // Auto-Pick, sonst feuert ein Race zwischen INSERT/UPDATE-Realtime
+    // einen Storm aus, der die ganze Runde in Sekunden durchpickt.
+    if (S._lastPickInsertAt && (Date.now() - S._lastPickInsertAt) < 4000) return;
     // Drafter macht Auto-Pick sofort; alle anderen warten 2s, dann versuchen sie auch (race-safe via UNIQUE)
     const myTurn = isMyTurn();
     const overdueMs = Date.now() - new Date(pool.current_pick_deadline).getTime();
