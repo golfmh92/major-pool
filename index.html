@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Major Pool">
@@ -34,8 +34,8 @@
   --font-display:'Bebas Neue',Impact,sans-serif;
   --font-body:'Inter',system-ui,sans-serif;
 }
-html{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%;overflow:hidden;height:100%}
-body{height:100%;overflow:hidden;position:relative;background:var(--bg)}
+html{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%;overflow:hidden;height:100%;touch-action:manipulation}
+body{height:100%;overflow:hidden;position:relative;background:var(--bg);touch-action:manipulation}
 input,textarea,select,button{font-family:var(--font-body);font-size:inherit;color:inherit;border:none;outline:none;background:none}
 button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 ::-webkit-scrollbar{display:none}
@@ -318,7 +318,10 @@ body::before{content:'';position:fixed;inset:0;background:
 .modal .actions .btn{flex:1}
 
 /* ===== FAB ===== */
-.fab{position:absolute;bottom:calc(var(--tab-h) + var(--safe-bottom) + 20px);right:20px;width:52px;height:52px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,103,71,.3);z-index:50;transition:transform .2s}
+.fab{position:absolute;bottom:calc(var(--tab-h) + var(--safe-bottom) + 20px);right:20px;width:52px;height:52px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 20px rgba(0,103,71,.3);z-index:50;transition:transform .2s;border:none;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:0}
+.fab.pill{width:auto;height:48px;border-radius:24px;padding:0 18px;animation:fabPulse 1.6s ease-in-out infinite}
+.fab.pill svg{width:18px;height:18px}
+@keyframes fabPulse{0%,100%{box-shadow:0 4px 20px rgba(0,103,71,.35)}50%{box-shadow:0 4px 28px rgba(0,103,71,.65)}}
 .fab:active{transform:scale(.9)}
 .fab svg{width:24px;height:24px;stroke:#fff;stroke-width:2.5;fill:none}
 
@@ -903,6 +906,16 @@ body::before{content:'';position:fixed;inset:0;background:
 <div class="toast" id="toast"></div>
 
 <script>
+/* iOS Safari Zoom-Sperre — viewport user-scalable wird in PWAs teils ignoriert */
+document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - _lastTouchEnd <= 350) e.preventDefault();
+  _lastTouchEnd = now;
+}, { passive: false });
+
 /* ===================== Constants ===================== */
 const PAR = 72; // Default PAR (overridden by pool config)
 const ENTRY_FEE = 20;
@@ -2286,6 +2299,9 @@ function getCurrentDrafter() {
   if (!S.activePool || !S.poolMembers.length) return null;
   const totalPicks = S.poolPicks.length;
   const memberCount = S.poolMembers.length;
+  const maxRounds = S.activePool.picks_per_member || 4;
+  // Draft fertig — kein Drafter mehr, sonst räumt der Auto-Pick-Loop ins Endlose
+  if (totalPicks >= maxRounds * memberCount) return null;
   const round = Math.floor(totalPicks / memberCount) + 1;
   const positionInRound = totalPicks % memberCount;
   const reversed = round % 2 === 0;
@@ -2325,6 +2341,14 @@ function subscribeDraftRealtime() {
       S.poolPicks.push(payload.new);
       const member = S.poolMembers.find(m => m.id === payload.new.member_id);
       if (member) showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
+      // Deadline frisch aus DB holen — pools-UPDATE-Event kann mit Verzögerung
+      // ankommen, sonst tickt der Timer mit alter Deadline für den neuen Drafter weiter.
+      const { data: poolRow } = await sb.from('pools')
+        .select('status,current_pick_deadline')
+        .eq('id', S.activePool.id)
+        .maybeSingle();
+      if (poolRow) Object.assign(S.activePool, poolRow);
+      _lastRemainingShown = -1;
       // Drafter wechselt → "Modal vom User geschlossen"-Flag reset für nächsten Turn
       S.userClosedDraftModal = false;
       // Pending Pick verwerfen falls noch offen (z.B. ein anderer war schneller)
@@ -4205,6 +4229,7 @@ function openPoolDraftModal() {
   }
   filterGolferList();
   openModal('modalDraftPick');
+  updateFab();
   // Auf Handys keinen Auto-Focus (würde Software-Keyboard sofort hochziehen)
 }
 
@@ -4273,7 +4298,11 @@ async function acceptPickConfirm() {
 async function pickGolfer(name) {
   if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
   const current = getCurrentDrafter();
-  if (!current) { showToast('Kein Drafter ermittelt'); return; }
+  if (!current) { showToast('Draft ist bereits abgeschlossen'); return; }
+  const maxRounds = S.activePool.picks_per_member || 4;
+  if (S.poolPicks.length >= maxRounds * S.poolMembers.length) {
+    showToast('Draft ist bereits abgeschlossen'); return;
+  }
   if (S.poolPicks.some(p => p.golfer_name.toLowerCase() === name.toLowerCase())) {
     showToast('Bereits gedraftet'); return;
   }
@@ -4374,12 +4403,23 @@ function render() {
 function updateFab() {
   const fab = document.getElementById('fab');
   if (!fab) return;
-  if (S.activePool && ['draft','drafting'].includes(S.activePool.status) && S.activeTab === 'draft' && isMyTurn()) {
-    fab.classList.remove('hidden');
-    fab.onclick = () => openPoolDraftModal();
-  } else {
+  const myTurn = S.activePool && ['draft','drafting'].includes(S.activePool.status) && isMyTurn();
+  if (!myTurn) {
     fab.classList.add('hidden');
+    fab.classList.remove('pill');
+    return;
   }
+  fab.classList.remove('hidden');
+  // Modal offen → kleines Plus-Icon, dezent. Modal weggeklickt → beschrifteter Pill-Button.
+  const modalOpen = document.getElementById('modalDraftPick')?.classList.contains('open');
+  if (modalOpen) {
+    fab.classList.remove('pill');
+    fab.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  } else {
+    fab.classList.add('pill');
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg><span>Weiterpicken</span>';
+  }
+  fab.onclick = () => { S.userClosedDraftModal = false; openPoolDraftModal(); updateFab(); };
 }
 
 /* ===================== UI Helpers ===================== */
@@ -4393,11 +4433,10 @@ function closeModal(id) {
 // Close modals on backdrop click + prevent background scroll
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) {
-      overlay.classList.remove('open');
-      if (overlay.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; }
-      if (overlay.id === 'modalScorecard') S._openScorecardName = null;
-    }
+    if (e.target !== overlay) return;
+    overlay.classList.remove('open');
+    if (overlay.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; updateFab(); }
+    if (overlay.id === 'modalScorecard') S._openScorecardName = null;
   });
   overlay.addEventListener('touchmove', e => {
     if (!e.target.closest('.modal')) e.preventDefault();
@@ -4420,7 +4459,9 @@ document.querySelectorAll('.modal').forEach(modal => {
     const dy = currentY - startY;
     swiping = false;
     if (dy > 80) {
-      modal.closest('.modal-overlay').classList.remove('open');
+      const ov = modal.closest('.modal-overlay');
+      ov.classList.remove('open');
+      if (ov.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; updateFab(); }
     }
     modal.style.transform = '';
     currentY = 0;
