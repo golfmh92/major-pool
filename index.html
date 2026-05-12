@@ -2623,6 +2623,26 @@ async function performAutoPick() {
     console.warn('[autopick]', error);
     return;
   }
+
+  // KRITISCH: Wie pickGolfer auch die Deadline neu setzen — sonst bleibt die
+  // alte (überfällige) Deadline in DB stehen, andere Clients sehen sofort
+  // wieder "overdue" und triggern den nächsten Auto-Pick. Genau das war
+  // der Storm-Loop nach dem ersten Auto-Pick.
+  const { data: picksRefreshed } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
+  S.poolPicks = picksRefreshed || [];
+  const maxRounds = S.activePool.picks_per_member || 4;
+  const totalNeeded = maxRounds * S.poolMembers.length;
+  if (S.poolPicks.length >= totalNeeded) {
+    await sb.from('pools').update({ current_pick_deadline: null }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = null;
+  } else if (S.activePool.status === 'drafting') {
+    const seconds = S.activePool.pick_seconds || 60;
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+    await sb.from('pools').update({ current_pick_deadline: newDeadline }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = newDeadline;
+  }
+  S._lastPickInsertAt = Date.now();
+  _lastRemainingShown = -1;
   showToast('Auto-Pick: ' + pickName);
 }
 
@@ -4491,12 +4511,16 @@ function filterGolferList() {
     const isTaken = taken.has(normalizeName(g.name));
     const isFav = favSet.has(normalizeName(g.name));
     const safeName = esc(g.name).replace(/'/g, "\\'");
-    return `<div onclick="${isTaken ? '' : `confirmPickGolfer('${safeName}')`}"
-      style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:${isTaken ? 'not-allowed' : 'pointer'};opacity:${isTaken ? '0.4' : '1'};${isFav ? 'background:rgba(245,158,11,0.06)' : ''}">
-      <button onclick="event.stopPropagation();toggleFavorite('${safeName}');filterGolferList()" style="background:none;border:none;cursor:pointer;padding:2px;color:${isFav ? '#f59e0b' : 'var(--text3)'};font-size:18px;line-height:1;flex-shrink:0" aria-label="Favorit">${isFav ? '★' : '☆'}</button>
-      <div style="flex:1;font-size:14px;font-weight:500">${esc(g.name)}${isTaken ? ' <span style="font-size:10px;color:var(--text3)">(gewählt)</span>' : ''}</div>
-      <div style="font-size:12px;color:var(--text3);min-width:32px;text-align:right">${g.position || ''}</div>
-      <div style="font-family:var(--font-display);font-size:14px;font-weight:700;min-width:32px;text-align:right" class="${scoreClass(g.toPar)}">${fmtScore(g.toPar)}</div>
+    // Picken nur über den expliziten Button rechts — vorher war die ganze
+    // Zeile click-target und User haben beim Scrollen versehentlich gepickt.
+    return `<div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;opacity:${isTaken ? '0.45' : '1'};${isFav ? 'background:rgba(245,158,11,0.06)' : ''}">
+      <button onclick="toggleFavorite('${safeName}');filterGolferList()" style="background:none;border:none;cursor:pointer;padding:4px;color:${isFav ? '#f59e0b' : 'var(--text3)'};font-size:20px;line-height:1;flex-shrink:0" aria-label="Favorit">${isFav ? '★' : '☆'}</button>
+      <div style="flex:1;min-width:0;font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${isTaken ? ' <span style="font-size:10px;color:var(--text3)">(gewählt)</span>' : ''}</div>
+      <div style="font-size:11px;color:var(--text3);min-width:28px;text-align:right">${g.position || ''}</div>
+      <div style="font-family:var(--font-display);font-size:13px;font-weight:700;min-width:30px;text-align:right" class="${scoreClass(g.toPar)}">${fmtScore(g.toPar)}</div>
+      ${isTaken
+        ? `<div style="min-width:64px;text-align:center;font-size:11px;color:var(--text3);padding:6px 8px">gewählt</div>`
+        : `<button onclick="confirmPickGolfer('${safeName}')" style="background:var(--green);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;min-width:64px">Picken</button>`}
     </div>`;
   }).join('');
 }
