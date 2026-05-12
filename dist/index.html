@@ -3197,22 +3197,20 @@ function toggleFavorite(name) {
 }
 
 function showScorecardByName(playerName) {
-  const data = S.liveScores[playerName];
+  let data = S.liveScores[playerName];
+  let matchedName = playerName;
   if (!data) {
-    // Try fuzzy match
+    // Fuzzy match auf normalisierten Namen
     for (const [name, d] of Object.entries(S.liveScores)) {
       if (normalizeName(name) === normalizeName(playerName)) {
-        S._openScorecardName = name;
-        renderScorecardContent(name, d);
-        openModal('modalScorecard');
-        return;
+        data = d; matchedName = name; break;
       }
     }
-    showToast('Keine Scorecard-Daten');
-    return;
   }
-  S._openScorecardName = playerName;
-  renderScorecardContent(playerName, data);
+  // Pre-Tournament / kein Live-Match: Modal trotzdem öffnen mit minimaler Info
+  // (Name, Owner, Hinweis). Vorher kam nur ein Toast und nichts ging weiter.
+  S._openScorecardName = matchedName;
+  renderScorecardContent(matchedName, data || null);
   openModal('modalScorecard');
 }
 
@@ -3221,6 +3219,7 @@ const ARONIMINK_PARS = [4,4,4,4,3,4,4,4,4, 4,4,3,4,4,5,3,4,4];
 
 function renderScorecardContent(name, live) {
   const poolPar = (S.activePool?.par) || PAR;
+  const hasLive = !!live;
 
   // Owners (für PGA Pool: wer hat den Spieler im Team)
   const owners = [];
@@ -3235,16 +3234,32 @@ function renderScorecardContent(name, live) {
 
   // Header
   const headerHtml = `<div class="scorecard-header">
-    ${live.headshot ? `<img class="scorecard-avatar" src="${live.headshot}" onerror="this.style.display='none'">` : `<div class="scorecard-avatar-fallback">${name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
+    ${hasLive && live.headshot ? `<img class="scorecard-avatar" src="${live.headshot}" onerror="this.style.display='none'">` : `<div class="scorecard-avatar-fallback">${name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
     <div class="scorecard-header-info">
       <div style="font-family:var(--font-display);font-size:20px;color:var(--text);letter-spacing:0.5px">${esc(name)}</div>
       <div style="font-size:13px;color:var(--text2);margin-top:2px">
-        ${live.position ? `Platz ${live.position}` : ''}
-        ${live.thru && live.thru !== 'F' && live.statusState !== 'pre' ? ` · thru ${live.thru}` : ''}
+        ${hasLive && live.position ? `Platz ${live.position}` : ''}
+        ${hasLive && live.thru && live.thru !== 'F' && live.statusState !== 'pre' ? ` · thru ${live.thru}` : ''}
       </div>
       ${owners.length > 0 ? `<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:3px">${owners.map(esc).join(' · ')}</div>` : ''}
     </div>
   </div>`;
+
+  // Kein Live-Match (Pre-Tournament, ESPN hat Field noch nicht freigegeben)
+  if (!hasLive) {
+    const t = S.tournament;
+    const startStr = t?.start_date
+      ? new Date(t.start_date).toLocaleDateString('de-AT', { weekday: 'short', day: 'numeric', month: 'long' })
+      : null;
+    let body = `<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px;line-height:1.5">`;
+    body += t ? `<div style="font-weight:600;color:var(--text);margin-bottom:6px">${esc(t.name)}</div>` : '';
+    body += startStr ? `<div>Turnier startet am <strong>${startStr}</strong></div>` : '';
+    body += `<div style="margin-top:14px;font-size:12px;color:var(--text3)">Scorecard, Bilder und Tee Times kommen, sobald ESPN das Field freigegeben hat.</div>`;
+    body += `</div>`;
+    document.getElementById('scorecardTitle').innerHTML = headerHtml;
+    document.getElementById('scorecardContent').innerHTML = body;
+    return;
+  }
 
   function holeClass(relPar) {
     if (relPar === null || relPar === undefined) return 'sc-par';
