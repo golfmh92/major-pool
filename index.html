@@ -4011,11 +4011,48 @@ async function addPlaceholderMember() {
 }
 
 async function removePoolMember(memberId) {
-  if (!confirm('Mitspieler wirklich entfernen?')) return;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  if (!isAdmin) { showToast('Nur Admins können kicken'); return; }
+  const target = S.poolMembers.find(m => m.id === memberId);
+  if (!target) return;
+  if (target.user_id === S.userId) { showToast('Dich selbst kannst du nicht kicken'); return; }
+
+  const memberPicks = S.poolPicks.filter(p => p.member_id === memberId).length;
+  const status = S.activePool?.status;
+  const inDraft = status === 'drafting' || status === 'draft' || status === 'lobby';
+  let msg = `${memberName(target)} wirklich aus dem Pool entfernen?`;
+  if (memberPicks > 0) msg += `\n\nAlle ${memberPicks} bereits gemachten Picks werden gelöscht.`;
+  if (status === 'active' || status === 'finished') {
+    msg += '\n\nACHTUNG: Pool läuft bereits — Reihenfolge und Rangliste ändern sich.';
+  }
+  if (!confirm(msg)) return;
+
   const { error } = await sb.from('pool_members').delete().eq('id', memberId);
   if (error) { showToast('Fehler: ' + error.message); return; }
+
+  // draft_position neu durchnummerieren, sortiert nach alter Position — sonst
+  // gibt es Lücken (1,2,4) und getCurrentDrafter() rechnet falsch.
+  const remaining = S.poolMembers
+    .filter(m => m.id !== memberId)
+    .sort((a, b) => (a.draft_position || 99) - (b.draft_position || 99));
+  for (let i = 0; i < remaining.length; i++) {
+    if (remaining[i].draft_position !== i + 1) {
+      await sb.from('pool_members').update({ draft_position: i + 1 }).eq('id', remaining[i].id);
+    }
+  }
+
+  // Falls Draft gerade läuft und der gekickte dran war: Deadline frisch setzen.
+  if (status === 'drafting') {
+    const seconds = S.activePool.pick_seconds || 60;
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+    await sb.from('pools').update({ current_pick_deadline: newDeadline }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = newDeadline;
+    _lastRemainingShown = -1;
+  }
+
   await loadPoolData();
   render();
+  showToast(`${memberName(target)} entfernt${memberPicks > 0 ? ` (${memberPicks} Picks gelöscht)` : ''}`);
 }
 
 function renderPoolDraft(c) {
@@ -4106,10 +4143,12 @@ function renderPoolDraft(c) {
   html += ordered.map(m => {
     const memberPicks = S.poolPicks.filter(p => p.member_id === m.id).length;
     const isCurrent = cur?.member?.id === m.id;
+    const canKick = isAdmin && m.user_id !== S.userId;
     return `<div class="order-item" ${isCurrent ? 'style="border:2px solid var(--green)"' : ''}>
       <div class="order-num">${m.draft_position || '?'}</div>
       <div class="order-name">${esc(memberName(m))}${m.is_placeholder ? ' <span style="font-size:10px;color:var(--text3)">PH</span>' : ''}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
       <div style="font-size:11px;color:var(--text3)">${memberPicks}/${maxRounds}</div>
+      ${canKick ? `<button onclick="event.stopPropagation();removePoolMember('${m.id}')" title="Kicken" style="background:none;border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:8px">Kick</button>` : ''}
     </div>`;
   }).join('');
 
@@ -4148,11 +4187,16 @@ function renderPoolLobby(c, pool, isAdmin) {
   const fieldSize = (S.tournamentGolfers || []).length;
   const maxMembers = fieldSize > 0 ? Math.floor(fieldSize / picks) : null;
 
-  const slotsHtml = members.map(m => `<div class="order-item" style="background:var(--card)">
-    <div class="order-num">${m.draft_position || ''}</div>
-    <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
-    <div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>
-  </div>`);
+  const slotsHtml = members.map(m => {
+    const canKick = isAdmin && m.user_id !== S.userId;
+    return `<div class="order-item" style="background:var(--card)">
+      <div class="order-num">${m.draft_position || ''}</div>
+      <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+      ${canKick
+        ? `<button onclick="removePoolMember('${m.id}')" title="Kicken" style="background:none;border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:8px">Kick</button>`
+        : `<div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>`}
+    </div>`;
+  });
 
   // Ein "offener" Platzhalter-Slot, solange noch Kapazität da ist (oder unbekannt)
   if (maxMembers === null || joined < maxMembers) {
