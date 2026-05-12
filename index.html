@@ -164,14 +164,21 @@ body::before{content:'';position:fixed;inset:0;background:
 .podium-slot.mine .podium-name{color:var(--green)}
 
 /* Transfer cards */
-.transfer-section{padding:12px 16px}
+.transfer-section{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .transfer-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:8px}
-.transfer-card{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:6px}
-.transfer-card.mine{background:var(--green-dim);border:1px solid rgba(27,58,92,.15)}
-.transfer-from{font-weight:500;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.transfer-arrow{color:var(--text3);flex-shrink:0;display:flex;align-items:center}
-.transfer-to{font-weight:600;font-size:13px;color:var(--green);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
-.transfer-amount{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--green);flex-shrink:0;margin-left:4px}
+.transfer-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(135deg,var(--bg) 0%,var(--bg2) 100%);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.transfer-card.mine{background:linear-gradient(135deg,rgba(0,103,71,.06) 0%,rgba(0,103,71,.12) 100%);border-color:rgba(0,103,71,.25);box-shadow:0 2px 8px rgba(0,103,71,.08)}
+.transfer-avatar{width:34px;height:34px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.3px}
+.transfer-avatar.debtor{background:linear-gradient(135deg,#c2410c 0%,#ea580c 100%)}
+.transfer-avatar.creditor{background:linear-gradient(135deg,#0d7c4f 0%,#10a368 100%)}
+.transfer-from{font-weight:500;font-size:13px;color:var(--text2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.transfer-arrow{color:var(--green);flex-shrink:0;display:flex;align-items:center;opacity:.6}
+.transfer-to{font-weight:600;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.transfer-amount{font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--green);flex-shrink:0;padding-left:8px;border-left:2px solid var(--border);margin-left:4px;grid-column:1 / -1;text-align:center;padding-top:6px;border-top:1px dashed var(--border);border-left:0;margin-top:2px;padding-left:0}
+@media (min-width: 380px){
+  .transfer-card{grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr) auto auto}
+  .transfer-amount{grid-column:auto;text-align:right;padding-top:0;border-top:0;border-left:2px solid var(--border);padding-left:10px;margin-top:0}
+}
 
 .payout-row{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:14px}
 .payout-row:last-child{border-bottom:none}
@@ -1530,7 +1537,7 @@ function renderProfile() {
       <div style="font-weight:600">${esc(S.activePool.name)}</div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">${S.poolMembers.length} Teilnehmer &middot; ${S.activePool.entry_fee}&euro; Einsatz &middot; Status: ${S.activePool.status}</div>
       <button class="btn btn-primary btn-block" onclick="showInviteLink(S.activePool)" style="margin-top:10px;padding:10px;font-size:13px">Einladungslink teilen</button>
-      <button class="btn btn-secondary btn-block" onclick="sharePoolResult()" style="margin-top:6px;padding:10px;font-size:13px">Ergebnis teilen</button>
+      ${S.activePool.status === 'finished' ? `<button class="btn btn-secondary btn-block" onclick="sharePoolResult()" style="margin-top:6px;padding:10px;font-size:13px">Ergebnis teilen</button>` : ''}
       ${isPoolAdmin && S.activePool.status === 'active' ? `<button class="btn btn-secondary btn-block" onclick="if(confirm('Pool wirklich abschlie&szlig;en?'))finishPool()" style="margin-top:6px;padding:10px;font-size:13px">Pool jetzt abschlie&szlig;en</button>` : ''}
       ${isPoolAdmin ? `<button class="btn btn-block" onclick="deletePool()" style="margin-top:6px;padding:10px;font-size:13px;background:none;border:1px solid var(--red);color:var(--red)">🗑️ Pool löschen</button>` : ''}
     </div>`;
@@ -2211,11 +2218,16 @@ function buildPoolSnapshot() {
     };
   });
   const pot = S.poolMembers.length * (pool.entry_fee || 0);
-  const payouts = [
-    { rank: 1, amount: Math.round(pot * 0.6 * 100) / 100 },
-    { rank: 2, amount: Math.round(pot * 0.3 * 100) / 100 },
-    { rank: 3, amount: Math.round(pot * 0.1 * 100) / 100 }
-  ];
+  const activeRanking = ranking.filter(r => !r.isEliminated);
+  const withPayouts = calcPayouts(pot, activeRanking);
+  // Pro Spieler den tatsächlichen Tie-aware Payout — sonst stimmt der
+  // Snapshot bei Gleichstand nicht mit der UI-Anzeige überein.
+  const payouts = withPayouts.map((r, i) => ({
+    rank: i + 1,
+    name: r.name,
+    amount: r.payout,
+    tied: withPayouts.filter(x => x.total === r.total).length > 1
+  }));
   return {
     pool_id: pool.id,
     name: pool.name,
@@ -2244,18 +2256,20 @@ async function sharePoolResult(poolId) {
   }
   if (!snap) { showToast('Kein Ergebnis verfügbar'); return; }
 
+  // Payout pro Name nachschlagen — bei Tie zeigt der Share-Text dann den
+  // tatsächlich aufgeteilten Betrag und nicht die abstrakten Platz-Preise.
+  const payoutByName = {};
+  (snap.payouts || []).forEach(p => { if (p.name) payoutByName[p.name] = p.amount; });
+
   let text = `🏆 ${snap.name}\n\n`;
   snap.ranking.slice(0, 8).forEach((r, i) => {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
     const score = r.total === null ? '—' : (r.total === 0 ? 'E' : (r.total > 0 ? '+' + r.total : r.total));
-    text += `${medal} ${r.name} (${score})\n`;
+    const amt = payoutByName[r.name];
+    const amtStr = amt && amt > 0 ? ` · €${amt.toFixed(2)}` : '';
+    text += `${medal} ${r.name} (${score})${amtStr}\n`;
   });
   text += `\n💰 Pot: €${snap.pot.toFixed(2)}`;
-  if (snap.payouts && snap.payouts.length > 0) {
-    text += `\n1. Platz: €${snap.payouts[0].amount.toFixed(2)}`;
-    if (snap.payouts[1]) text += `\n2. Platz: €${snap.payouts[1].amount.toFixed(2)}`;
-    if (snap.payouts[2]) text += `\n3. Platz: €${snap.payouts[2].amount.toFixed(2)}`;
-  }
 
   if (navigator.share) {
     try {
@@ -3613,18 +3627,28 @@ function closeStPanel() {
 }
 
 /* ===================== Render: Payouts ===================== */
+// Dynamische Preisverteilung — bei 2 Spielern 60/40, sonst klassisch 60/30/10.
+// Damit wird bei 2 Mitspielern der gesamte Pot vergeben (nicht nur 90%).
+function payoutShares(n) {
+  if (n <= 1) return [1.0];
+  if (n === 2) return [0.6, 0.4];
+  return [0.6, 0.3, 0.1];
+}
+
 function calcPayouts(pot, ranking) {
-  const prizes = [0.6, 0.3, 0.1].map(p => Math.round(pot * p * 100) / 100);
+  const shares = payoutShares(ranking.length);
+  const prizes = shares.map(p => Math.round(pot * p * 100) / 100);
   const result = ranking.map(r => ({ ...r, payout: 0 }));
   // Tie-splitting: gleich-platzierte teilen sich die Summe der zugehörigen Preise.
   // Gleiches `total` (auch null === null vor Tournament-Start) zählt als Tie.
+  const maxPaid = prizes.length;
   let i = 0;
-  while (i < result.length && i < 3) {
+  while (i < result.length && i < maxPaid) {
     let j = i + 1;
     while (j < result.length && result[j].total === result[i].total) j++;
     const tiedCount = j - i;
     let tiedSum = 0;
-    for (let k = i; k < Math.min(j, 3); k++) tiedSum += prizes[k] || 0;
+    for (let k = i; k < Math.min(j, maxPaid); k++) tiedSum += prizes[k] || 0;
     const share = tiedCount > 0 ? Math.round(tiedSum / tiedCount * 100) / 100 : 0;
     for (let k = i; k < j; k++) result[k].payout = share;
     i = j;
@@ -3712,12 +3736,15 @@ function renderPayoutsTab() {
 
   if (transfers.length > 0) {
     html += '<div class="payout-card open"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Abrechnung<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body"><div class="transfer-section">';
+    const initials = name => (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     transfers.forEach(t => {
       const isMine = t.from === myName || t.to === myName;
       html += `<div class="transfer-card${isMine ? ' mine' : ''}">
+        <div class="transfer-avatar debtor">${esc(initials(t.from))}</div>
         <div class="transfer-from">${esc(t.from)}</div>
-        <div class="transfer-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+        <div class="transfer-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
         <div class="transfer-to">${esc(t.to)}</div>
+        <div class="transfer-avatar creditor">${esc(initials(t.to))}</div>
         <div class="transfer-amount">${fmtMoney(t.amount)}</div>
       </div>`;
     });
