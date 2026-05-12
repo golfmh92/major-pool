@@ -2384,6 +2384,14 @@ function subscribeDraftRealtime() {
       S.pendingPick = null;
       const ovl = document.getElementById('pickConfirmOverlay');
       if (ovl) ovl.style.display = 'none';
+      // Wenn das Pick-Modal offen ist, aber dieser Client nicht mehr dran ist
+      // (z. B. weil der Admin gerade für ihn gepickt hat), Modal schließen —
+      // sonst klebt es beim Mitspieler auf dem Screen.
+      const modalEl = document.getElementById('modalDraftPick');
+      if (modalEl?.classList.contains('open') && !isMyTurn() && !S.adminPickOverride) {
+        modalEl.classList.remove('open');
+        S.draftModalOpen = false;
+      }
       render();
     })
     .subscribe();
