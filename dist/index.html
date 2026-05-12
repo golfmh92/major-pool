@@ -330,6 +330,9 @@ body::before{content:'';position:fixed;inset:0;background:
 .fab.pill svg{width:18px;height:18px}
 .fab.admin{background:linear-gradient(135deg,#b45309 0%,#d97706 100%);animation:none;box-shadow:0 4px 16px rgba(180,83,9,.35)}
 .fab.admin:active{transform:scale(.97)}
+.presence-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background .2s}
+.presence-dot.is-online{background:#10b981;box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:presencePulse 2s infinite}
+@keyframes presencePulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 6px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
 @keyframes fabPulse{
   0%,100%{box-shadow:0 4px 20px rgba(0,103,71,.35), 0 0 0 0 rgba(0,103,71,.55);transform:scale(1)}
   50%{box-shadow:0 6px 30px rgba(0,103,71,.7), 0 0 0 14px rgba(0,103,71,0);transform:scale(1.05)}
@@ -979,6 +982,7 @@ let S = {
   _lastFingerprint: '',
   _openScorecardName: null,
   favorites: JSON.parse(localStorage.getItem('pga_favorites') || '[]'),
+  onlineUserIds: new Set(),
   lbRoundFilter: 0, // 0=Gesamt, 1-4=Runden
   // Field
   pgaTestField: [],
@@ -1315,6 +1319,7 @@ async function createPool() {
   await loadTournament();
   subscribeDraftRealtime();
   subscribePoolRealtime();
+  subscribePoolPresence();
   updateTabs();
   switchTab('draft');
   render();
@@ -1335,6 +1340,7 @@ async function joinPoolFromInput() {
     await loadTournament();
     subscribeDraftRealtime();
     subscribePoolRealtime();
+    subscribePoolPresence();
     if (S.activePool.status === 'drafting') ensurePickTimer();
     updateTabs();
     switchTab(S.activePool.status === 'lobby' || S.activePool.status === 'drafting' ? 'draft' : 'leaderboard');
@@ -2354,6 +2360,7 @@ function isMyTurn() {
 /* ===================== Realtime ===================== */
 let _draftChannel = null;
 let _poolChannel = null;
+let _presenceChannel = null;
 
 function subscribeDraftRealtime() {
   if (!S.activePool) return;
@@ -2451,6 +2458,48 @@ function unsubscribeDraftRealtime() {
     sb.removeChannel(_poolChannel);
     _poolChannel = null;
   }
+  if (_presenceChannel) {
+    sb.removeChannel(_presenceChannel);
+    _presenceChannel = null;
+  }
+  S.onlineUserIds = new Set();
+}
+
+// Supabase Realtime Presence — wer ist gerade im Pool offen.
+// Jeder Client trackt sich selbst mit seiner user_id; alle Clients
+// sehen den aggregierten Online-State via `presence sync`.
+function subscribePoolPresence() {
+  if (!S.activePool || !S.userId) return;
+  if (_presenceChannel) sb.removeChannel(_presenceChannel);
+
+  _presenceChannel = sb.channel('presence-pool-' + S.activePool.id, {
+    config: { presence: { key: S.userId } }
+  });
+
+  _presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      const state = _presenceChannel.presenceState();
+      const ids = new Set(Object.keys(state));
+      S.onlineUserIds = ids;
+      // Nur leichte Re-Renders der Listen, nicht ganzes UI neu aufbauen
+      refreshOnlineIndicators();
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await _presenceChannel.track({ user_id: S.userId, online_at: new Date().toISOString() });
+      }
+    });
+}
+
+// Schreibt nur die Online-Dots neu — DOM punktuell anfassen statt
+// die ganze render()-Kette zu triggern, sonst flackert die UI.
+function refreshOnlineIndicators() {
+  document.querySelectorAll('[data-presence-uid]').forEach(el => {
+    const uid = el.getAttribute('data-presence-uid');
+    const online = S.onlineUserIds && S.onlineUserIds.has(uid);
+    el.classList.toggle('is-online', !!online);
+    el.title = online ? 'Online' : 'Offline';
+  });
 }
 
 /* ===================== Pick-Timer & Auto-Pick ===================== */
@@ -2574,6 +2623,7 @@ async function initApp() {
       await loadPoolData();
       subscribeDraftRealtime();
       subscribePoolRealtime();
+      subscribePoolPresence();
       if (S.activePool.status === 'drafting') ensurePickTimer();
     }
     // Setup identity from auth
@@ -3825,10 +3875,14 @@ function renderAdminTab() {
   html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
     <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:10px">MITSPIELER (${S.poolMembers.length})</div>`;
   S.poolMembers.forEach(m => {
+    const isOnline = m.user_id && S.onlineUserIds.has(m.user_id);
+    const dot = m.user_id && !m.is_placeholder
+      ? `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-uid="${m.user_id}" title="${isOnline ? 'Online' : 'Offline'}"></span>`
+      : '';
     html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${memberInitials(m)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px">${esc(memberName(m))}</div>
+        <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px">${dot}<span>${esc(memberName(m))}</span></div>
         <div style="font-size:10px;color:var(--text3)">${m.is_placeholder ? 'Platzhalter' : (m.users?.email || 'Account')}${m.is_admin ? ' · Admin' : ''}</div>
       </div>
       ${m.user_id !== S.userId ? `<button onclick="removePoolMember('${m.id}')" style="background:none;border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">Entfernen</button>` : ''}
@@ -4144,9 +4198,13 @@ function renderPoolDraft(c) {
     const memberPicks = S.poolPicks.filter(p => p.member_id === m.id).length;
     const isCurrent = cur?.member?.id === m.id;
     const canKick = isAdmin && m.user_id !== S.userId;
+    const isOnline = m.user_id && S.onlineUserIds.has(m.user_id);
+    const dot = m.user_id && !m.is_placeholder
+      ? `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-uid="${m.user_id}" title="${isOnline ? 'Online' : 'Offline'}"></span>`
+      : '';
     return `<div class="order-item" ${isCurrent ? 'style="border:2px solid var(--green)"' : ''}>
       <div class="order-num">${m.draft_position || '?'}</div>
-      <div class="order-name">${esc(memberName(m))}${m.is_placeholder ? ' <span style="font-size:10px;color:var(--text3)">PH</span>' : ''}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+      <div class="order-name" style="display:flex;align-items:center;gap:8px">${dot}<span>${esc(memberName(m))}${m.is_placeholder ? ' <span style="font-size:10px;color:var(--text3)">PH</span>' : ''}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</span></div>
       <div style="font-size:11px;color:var(--text3)">${memberPicks}/${maxRounds}</div>
       ${canKick ? `<button onclick="event.stopPropagation();removePoolMember('${m.id}')" title="Kicken" style="background:none;border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:8px">Kick</button>` : ''}
     </div>`;
@@ -4189,9 +4247,13 @@ function renderPoolLobby(c, pool, isAdmin) {
 
   const slotsHtml = members.map(m => {
     const canKick = isAdmin && m.user_id !== S.userId;
+    const isOnline = m.user_id && S.onlineUserIds.has(m.user_id);
+    const dot = m.user_id && !m.is_placeholder
+      ? `<span class="presence-dot${isOnline ? ' is-online' : ''}" data-presence-uid="${m.user_id}" title="${isOnline ? 'Online' : 'Offline'}"></span>`
+      : '';
     return `<div class="order-item" style="background:var(--card)">
       <div class="order-num">${m.draft_position || ''}</div>
-      <div class="order-name">${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</div>
+      <div class="order-name" style="display:flex;align-items:center;gap:8px">${dot}<span>${esc(memberName(m))}${m.is_admin ? ' <span style="font-size:10px;color:var(--green)">ADMIN</span>' : ''}</span></div>
       ${canKick
         ? `<button onclick="removePoolMember('${m.id}')" title="Kicken" style="background:none;border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:8px">Kick</button>`
         : `<div style="font-size:11px;color:var(--green);font-weight:600">✓ DA</div>`}
