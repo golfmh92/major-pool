@@ -1415,7 +1415,13 @@ async function loadPoolData() {
 function updateTabs() {
   const hasPool = !!S.activePool;
   const status = S.activePool?.status;
-  const inDraft = hasPool && (status === 'lobby' || status === 'drafting' || status === 'draft');
+  // Draft "fertig", wenn alle Snake-Picks gemacht sind — auch wenn der Pool noch
+  // auf 'drafting' steht (Admin hat noch nicht aktiviert). Tab dann ausblenden,
+  // weil es nichts mehr zu picken gibt.
+  const maxRounds = (S.activePool?.picks_per_member) || 4;
+  const memberCount = S.poolMembers?.length || 0;
+  const allPicked = hasPool && memberCount > 0 && S.poolPicks.length >= maxRounds * memberCount;
+  const inDraft = hasPool && !allPicked && (status === 'lobby' || status === 'drafting' || status === 'draft');
   const isGuest = S.isGuest;
 
   const tabConfig = {
@@ -3610,20 +3616,18 @@ function closeStPanel() {
 function calcPayouts(pot, ranking) {
   const prizes = [0.6, 0.3, 0.1].map(p => Math.round(pot * p * 100) / 100);
   const result = ranking.map(r => ({ ...r, payout: 0 }));
-  // Tie-splitting: tied positions share sum of their prizes
+  // Tie-splitting: gleich-platzierte teilen sich die Summe der zugehörigen Preise.
+  // Gleiches `total` (auch null === null vor Tournament-Start) zählt als Tie.
   let i = 0;
   while (i < result.length && i < 3) {
     let j = i + 1;
-    // Tied: gleicher total, aber nur wenn total nicht null (sonst kein Vergleich)
-    if (result[i].total !== null) {
-      while (j < result.length && result[j].total === result[i].total) j++;
-    }
+    while (j < result.length && result[j].total === result[i].total) j++;
     const tiedCount = j - i;
     let tiedSum = 0;
     for (let k = i; k < Math.min(j, 3); k++) tiedSum += prizes[k] || 0;
     const share = tiedCount > 0 ? Math.round(tiedSum / tiedCount * 100) / 100 : 0;
     for (let k = i; k < j; k++) result[k].payout = share;
-    i = j;  // garantiert Fortschritt (j >= i+1)
+    i = j;
   }
   return result;
 }
@@ -4404,9 +4408,17 @@ function render() {
   } else if (main === 'draft') {
     renderDraftTab();
   }
-  // FAB-Sichtbarkeit nach jedem Render aktualisieren — sonst bleibt der
-  // "Weiterpicken"-Button stehen, obwohl man nicht mehr dran ist.
+  // Tab-Sichtbarkeit + FAB nach jedem Render aktualisieren — sonst bleibt
+  // der Draft-Tab oder Weiterpicken-Button hängen, wenn sich der Status
+  // per Realtime ändert.
+  updateTabs();
   updateFab();
+  // Falls aktiver Tab gerade versteckt wurde, auf den nächsten sichtbaren wechseln.
+  const activeEl = document.querySelector('.tab.active');
+  if (activeEl && activeEl.classList.contains('hidden')) {
+    const firstVisible = document.querySelector('.tab:not(.hidden)');
+    if (firstVisible?.dataset.tab) switchTab(firstVisible.dataset.tab);
+  }
 }
 
 function updateFab() {
