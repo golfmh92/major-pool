@@ -92,7 +92,15 @@ CREATE POLICY "pool_members_delete" ON pool_members FOR DELETE USING (
 );
 
 CREATE POLICY "pool_picks_select" ON pool_picks FOR SELECT USING (true);
-CREATE POLICY "pool_picks_insert" ON pool_picks FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "pool_picks_insert" ON pool_picks FOR INSERT WITH CHECK (
+  auth.uid() = user_id
+  OR EXISTS (
+    SELECT 1 FROM pool_members
+    WHERE pool_members.pool_id = pool_picks.pool_id
+      AND pool_members.user_id = auth.uid()
+      AND pool_members.is_admin = true
+  )
+);
 
 CREATE POLICY "pool_scores_select" ON pool_scores FOR SELECT USING (true);
 CREATE POLICY "pool_scores_insert" ON pool_scores FOR INSERT WITH CHECK (

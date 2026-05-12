@@ -328,6 +328,8 @@ body::before{content:'';position:fixed;inset:0;background:
 .fab{position:absolute;bottom:calc(var(--tab-h) + var(--safe-bottom) + 20px);right:20px;width:52px;height:52px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 20px rgba(0,103,71,.3);z-index:50;transition:transform .2s;border:none;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:0}
 .fab.pill{width:auto;height:48px;border-radius:24px;padding:0 18px;animation:fabPulse 1.4s ease-in-out infinite}
 .fab.pill svg{width:18px;height:18px}
+.fab.admin{background:linear-gradient(135deg,#b45309 0%,#d97706 100%);animation:none;box-shadow:0 4px 16px rgba(180,83,9,.35)}
+.fab.admin:active{transform:scale(.97)}
 @keyframes fabPulse{
   0%,100%{box-shadow:0 4px 20px rgba(0,103,71,.35), 0 0 0 0 rgba(0,103,71,.55);transform:scale(1)}
   50%{box-shadow:0 6px 30px rgba(0,103,71,.7), 0 0 0 14px rgba(0,103,71,0);transform:scale(1.05)}
@@ -952,6 +954,7 @@ let S = {
   golfers: [],
   scores: [],
   bonuses: [],
+  adminPickOverride: false,
   isAdmin: false,
   userId: null,
   activeTab: 'leaderboard',
@@ -2138,8 +2141,11 @@ async function fetchLiveScores() {
 
     if (changed) {
       Object.values(scores).forEach(s => { if (s.headshot) { new Image().src = s.headshot; } });
-      // Auto-freeze when tournament ends
-      if (S.tournamentFinished && S.activePool && !localStorage.getItem('pga_frozen_' + S.activePool.id)) {
+      // Auto-Freeze nur, wenn der Pool selbst als 'finished' markiert ist
+      // (Admin-Action via finishPool). NICHT mehr ESPN-getrieben — das hat
+      // früher ungewollte Phantom-Scores erzeugt, wenn ESPN ein anderes oder
+      // älteres Event als "tournament finished" gemeldet hat.
+      if (S.activePool?.status === 'finished' && !localStorage.getItem('pga_frozen_' + S.activePool.id)) {
         freezePoolScores();
       }
       render();
@@ -3949,10 +3955,16 @@ async function assignCurrentTournament() {
     .limit(1);
   if (error || !data || data.length === 0) { showToast('Kein Turnier gefunden. Worker läuft?'); return; }
   const t = data[0];
+  if (t.id === S.activePool.tournament_id) { showToast(`${t.name} bereits zugewiesen`); return; }
+  // Alte gefrorene Scores aus dem vorherigen Turnier verwerfen — sonst zeigt
+  // die Rangliste weiter Phantom-Werte aus dem alten Event.
+  await sb.from('pool_scores').delete().eq('pool_id', S.activePool.id);
+  localStorage.removeItem('pga_frozen_' + S.activePool.id);
   const { error: uErr } = await sb.from('pools').update({ tournament_id: t.id }).eq('id', S.activePool.id);
   if (uErr) { showToast('Fehler: ' + uErr.message); return; }
   S.activePool.tournament_id = t.id;
   await loadTournament();
+  await loadPoolData();
   render();
   showToast(`${t.name} zugewiesen`);
 }
@@ -4046,6 +4058,17 @@ function renderPoolDraft(c) {
             ${remaining !== null ? `<div style="font-family:var(--font-display);font-size:32px;color:${isLowTimer ? 'var(--red)' : 'var(--text)'};margin-top:8px">${remaining}<span style="font-size:14px">s</span></div>` : ''}
           </div>`;
       html += banner;
+
+      // Admin-Override-Karte: Admin kann für den aktuellen Drafter einspringen,
+      // wenn dieser nicht selbst der Admin ist und kein Platzhalter (für die
+      // ist isMyTurn bereits true und das normale Modal greift).
+      if (!myTurn && isAdmin && !current.member.is_placeholder) {
+        html += `<div style="background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:1px solid #f59e0b;color:#78350f;padding:14px;border-radius:var(--radius);margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">🛠 Admin-Override</div>
+          <div style="font-size:13px;line-height:1.4;margin-bottom:10px">${esc(mName)} ist dran. Falls etwas schiefläuft, kannst du als Admin den Pick für ${esc(mName)} machen.</div>
+          <button class="btn" onclick="openPoolDraftModal({adminOverride:true})" style="background:#78350f;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer">Pick für ${esc(mName)} öffnen</button>
+        </div>`;
+      }
 
       // Auto-Modal: wenn dran und Modal nicht offen → öffnen (auch nach Scrollen)
       if (myTurn && !S.draftModalOpen && !S.userClosedDraftModal) {
@@ -4251,19 +4274,29 @@ function showPoolStartedModal() {
   if (ovl) ovl.style.display = 'flex';
 }
 
-function openPoolDraftModal() {
-  if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+function openPoolDraftModal(opts) {
+  const adminOverride = !!opts?.adminOverride;
+  if (adminOverride) {
+    const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+    if (!isAdmin) { showToast('Nur Admins können das'); return; }
+  } else if (!isMyTurn()) {
+    showToast('Du bist nicht dran'); return;
+  }
   // Hardstop falls Draft inzwischen fertig — sonst kann ein verzögertes Realtime-Event
   // oder ein FAB-Klick das Modal nochmal öffnen, obwohl getCurrentDrafter() null ist.
   const maxRounds = (S.activePool && S.activePool.picks_per_member) || 4;
   if (S.poolPicks.length >= maxRounds * S.poolMembers.length) return;
+  S.adminPickOverride = adminOverride;
   S.draftModalOpen = true;
   S.userClosedDraftModal = false;
   document.getElementById('inputGolferName').value = '';
   const current = getCurrentDrafter();
   const ctx = document.getElementById('draftPickContext');
   if (ctx && current) {
-    ctx.textContent = `Runde ${current.round} · Pick ${current.pickInRound} · für ${memberName(current.member)}`;
+    const base = `Runde ${current.round} · Pick ${current.pickInRound} · für ${memberName(current.member)}`;
+    ctx.innerHTML = adminOverride
+      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:8px 10px;border-radius:8px;margin-bottom:6px;font-weight:600;font-size:12px">🛠 Admin-Override für ${esc(memberName(current.member))}</div><span>${base}</span>`
+      : base;
   }
   filterGolferList();
   openModal('modalDraftPick');
@@ -4311,11 +4344,17 @@ function filterGolferList() {
 
 // Spieler antippen → Bestätigungs-Dialog. Wenn Timer abläuft während offen → Pending Pick wird ausgeführt.
 function confirmPickGolfer(name) {
-  if (!isMyTurn()) { showToast('Du bist nicht dran'); return; }
+  if (!S.adminPickOverride && !isMyTurn()) { showToast('Du bist nicht dran'); return; }
   S.pendingPick = name;
   const confirmEl = document.getElementById('pickConfirmOverlay');
   if (!confirmEl) return;
-  document.getElementById('pickConfirmName').textContent = name;
+  const current = getCurrentDrafter();
+  const nameEl = document.getElementById('pickConfirmName');
+  if (nameEl) {
+    nameEl.innerHTML = S.adminPickOverride && current
+      ? `${esc(name)}<div style="font-size:12px;color:#92400e;margin-top:4px;font-weight:500">für ${esc(memberName(current.member))}</div>`
+      : esc(name);
+  }
   confirmEl.style.display = 'flex';
 }
 
@@ -4330,7 +4369,11 @@ async function acceptPickConfirm() {
   if (!name) return;
   S.pendingPick = null;
   document.getElementById('pickConfirmOverlay').style.display = 'none';
-  await pickGolfer(name);
+  if (S.adminPickOverride) {
+    await adminPickGolfer(name);
+  } else {
+    await pickGolfer(name);
+  }
 }
 
 async function pickGolfer(name) {
@@ -4380,6 +4423,57 @@ async function pickGolfer(name) {
   S.draftModalOpen = false;
   S.userClosedDraftModal = false;
   showToast(name + ' gedraftet!');
+  render();
+}
+
+// Admin-Override: für den aktuellen Drafter picken, auch wenn das nicht der
+// eingeloggte Admin selbst ist. RLS-Policy pool_picks_insert lässt das für
+// is_admin=true zu. Insert/Deadline/Reload-Pattern aus pickGolfer kopiert.
+async function adminPickGolfer(name) {
+  if (!S.activePool) return;
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  if (!isAdmin) { showToast('Nur Admins können das'); return; }
+  const current = getCurrentDrafter();
+  if (!current) { showToast('Draft ist bereits abgeschlossen'); return; }
+  const maxRounds = S.activePool.picks_per_member || 4;
+  if (S.poolPicks.length >= maxRounds * S.poolMembers.length) {
+    showToast('Draft ist bereits abgeschlossen'); return;
+  }
+  if (S.poolPicks.some(p => p.golfer_name.toLowerCase() === name.toLowerCase())) {
+    showToast('Bereits gedraftet'); return;
+  }
+
+  const { error } = await sb.from('pool_picks').insert({
+    pool_id: S.activePool.id,
+    user_id: current.member.user_id,
+    member_id: current.member.id,
+    golfer_name: name,
+    draft_round: current.round,
+    draft_pick: current.pickInRound
+  });
+  if (error) { showToast('Fehler: ' + error.message); return; }
+
+  const { data } = await sb.from('pool_picks').select('*').eq('pool_id', S.activePool.id);
+  S.poolPicks = data || [];
+
+  const totalNeeded = maxRounds * S.poolMembers.length;
+  if (S.poolPicks.length >= totalNeeded) {
+    await sb.from('pools').update({ current_pick_deadline: null }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = null;
+    showToast('Draft komplett!');
+  } else if (S.activePool.status === 'drafting') {
+    const seconds = S.activePool.pick_seconds || 60;
+    const newDeadline = new Date(Date.now() + seconds * 1000).toISOString();
+    await sb.from('pools').update({ current_pick_deadline: newDeadline }).eq('id', S.activePool.id);
+    S.activePool.current_pick_deadline = newDeadline;
+  }
+
+  document.getElementById('modalDraftPick').classList.remove('open');
+  S.draftModalOpen = false;
+  S.adminPickOverride = false;
+  S.userClosedDraftModal = false;
+  _lastRemainingShown = -1;
+  showToast(`Admin-Pick: ${name} für ${memberName(current.member)}`);
   render();
 }
 
@@ -4451,23 +4545,35 @@ function render() {
 function updateFab() {
   const fab = document.getElementById('fab');
   if (!fab) return;
-  const myTurn = S.activePool && ['draft','drafting'].includes(S.activePool.status) && isMyTurn();
-  if (!myTurn) {
-    fab.classList.add('hidden');
-    fab.classList.remove('pill');
-    return;
+  if (!S.activePool || !['draft','drafting'].includes(S.activePool.status)) {
+    fab.classList.add('hidden'); fab.classList.remove('pill','admin'); return;
+  }
+  const myTurn = isMyTurn();
+  const isAdmin = S.poolMembers.some(m => m.user_id === S.userId && m.is_admin);
+  const current = getCurrentDrafter();
+  const canAdminOverride = !myTurn && isAdmin && current && !current.member.is_placeholder;
+  if (!myTurn && !canAdminOverride) {
+    fab.classList.add('hidden'); fab.classList.remove('pill','admin'); return;
   }
   fab.classList.remove('hidden');
-  // Modal offen → kleines Plus-Icon, dezent. Modal weggeklickt → beschrifteter Pill-Button.
   const modalOpen = document.getElementById('modalDraftPick')?.classList.contains('open');
   if (modalOpen) {
-    fab.classList.remove('pill');
+    fab.classList.remove('pill','admin');
     fab.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-  } else {
-    fab.classList.add('pill');
+  } else if (myTurn) {
+    fab.classList.add('pill'); fab.classList.remove('admin');
     fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg><span>Weiterpicken</span>';
+  } else {
+    // Admin-Override-Pill (gelb): nur wenn der echte Drafter offline scheint
+    fab.classList.add('pill','admin');
+    fab.innerHTML = `<span style="font-size:14px">🛠</span><span>Für ${esc(memberName(current.member))}</span>`;
   }
-  fab.onclick = () => { S.userClosedDraftModal = false; openPoolDraftModal(); updateFab(); };
+  fab.onclick = () => {
+    S.userClosedDraftModal = false;
+    if (myTurn) openPoolDraftModal();
+    else if (canAdminOverride) openPoolDraftModal({ adminOverride: true });
+    updateFab();
+  };
 }
 
 /* ===================== UI Helpers ===================== */
@@ -4476,14 +4582,14 @@ function openModal(id) {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
-  if (id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; }
+  if (id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; S.adminPickOverride = false; updateFab(); }
 }
 // Close modals on backdrop click + prevent background scroll
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
     if (e.target !== overlay) return;
     overlay.classList.remove('open');
-    if (overlay.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; updateFab(); }
+    if (overlay.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; S.adminPickOverride = false; updateFab(); }
     if (overlay.id === 'modalScorecard') S._openScorecardName = null;
   });
   overlay.addEventListener('touchmove', e => {
@@ -4509,7 +4615,7 @@ document.querySelectorAll('.modal').forEach(modal => {
     if (dy > 80) {
       const ov = modal.closest('.modal-overlay');
       ov.classList.remove('open');
-      if (ov.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; updateFab(); }
+      if (ov.id === 'modalDraftPick') { S.draftModalOpen = false; S.userClosedDraftModal = true; S.adminPickOverride = false; updateFab(); }
     }
     modal.style.transform = '';
     currentY = 0;
