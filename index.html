@@ -3210,21 +3210,29 @@ function renderLeaderboardTab() {
   // Meine Golfer Strip
   const meineHtml = renderMeineGolfer();
 
-  // Picks-Map: golferName → memberName(s)
+  // Picks-Map: golferName → memberName(s). Indexiert sowohl unter dem
+  // ESPN-Live-Namen als auch unter dem ursprünglichen Pick-Namen, falls
+  // sie sich unterscheiden (Sonderzeichen, Abkürzungen). Pro Member-Name
+  // nur einmal pro Key, damit nicht "Markus · Markus" stehenbleibt.
   const golferOwners = {};
+  const addOwner = (key, mname) => {
+    if (!golferOwners[key]) golferOwners[key] = [];
+    if (!golferOwners[key].includes(mname)) golferOwners[key].push(mname);
+  };
   if (S.activePool) {
     S.poolPicks.forEach(p => {
       const m = S.poolMembers.find(mm => mm.id === p.member_id);
       if (!m) return;
+      const mname = memberName(m);
       const norm = normalizeName(p.golfer_name);
+      let matchedLiveName = null;
       for (const [liveName] of Object.entries(S.liveScores)) {
-        if (normalizeName(liveName) === norm) {
-          (golferOwners[liveName] = golferOwners[liveName] || []).push(memberName(m));
-          break;
-        }
+        if (normalizeName(liveName) === norm) { matchedLiveName = liveName; break; }
       }
-      // Also store under original pick name
-      (golferOwners[p.golfer_name] = golferOwners[p.golfer_name] || []).push(memberName(m));
+      if (matchedLiveName) addOwner(matchedLiveName, mname);
+      if (!matchedLiveName || matchedLiveName !== p.golfer_name) {
+        addOwner(p.golfer_name, mname);
+      }
     });
   }
 
