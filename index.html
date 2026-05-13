@@ -330,6 +330,19 @@ body::before{content:'';position:fixed;inset:0;background:
 .fab.pill svg{width:18px;height:18px}
 .fab.admin{background:linear-gradient(135deg,#b45309 0%,#d97706 100%);animation:none;box-shadow:0 4px 16px rgba(180,83,9,.35)}
 .fab.admin:active{transform:scale(.97)}
+.modal-pick-timer{font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--text);padding:6px 14px;border-radius:10px;background:var(--bg2);min-width:64px;text-align:center;transition:background .2s,color .2s;line-height:1}
+.modal-pick-timer:empty{display:none}
+.modal-pick-timer.low{color:#fff;background:#dc2626;animation:timerPulse 1s ease-in-out infinite}
+@keyframes timerPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(220,38,38,.5)}50%{transform:scale(1.1);box-shadow:0 0 0 10px rgba(220,38,38,0)}}
+.pick-notif-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1100;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);padding:24px}
+.pick-notif-overlay.show{opacity:1}
+.pick-notif-card{background:linear-gradient(135deg,#0a4d2e 0%,#1B3A5C 100%);color:#fff;border-radius:20px;padding:28px 24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);max-width:340px;width:100%;transform:translateY(20px) scale(.96);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.pick-notif-overlay.show .pick-notif-card{transform:translateY(0) scale(1)}
+.pick-notif-card .pn-icon{font-size:40px;line-height:1;margin-bottom:10px}
+.pick-notif-card .pn-who{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;opacity:.75;margin-bottom:4px}
+.pick-notif-card .pn-member{font-family:var(--font-display);font-size:22px;letter-spacing:.5px;margin-bottom:14px}
+.pick-notif-card .pn-arrow{font-size:13px;opacity:.6;margin-bottom:6px}
+.pick-notif-card .pn-golfer{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:.3px}
 .presence-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background .2s}
 .presence-dot.is-online{background:#10b981;box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:presencePulse 2s infinite}
 @keyframes presencePulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 6px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
@@ -765,7 +778,10 @@ body::before{content:'';position:fixed;inset:0;background:
 <div class="modal-overlay" id="modalDraftPick">
   <div class="modal">
     <div class="modal-handle"></div>
-    <h2>Draft Pick</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px">
+      <h2 style="margin:0">Draft Pick</h2>
+      <div id="modalPickTimer" class="modal-pick-timer" aria-live="polite"></div>
+    </div>
     <div id="draftPickContext" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
     <div class="form-group">
       <input class="input" type="text" id="inputGolferName" placeholder="Spieler suchen..." autocomplete="off" oninput="filterGolferList()">
@@ -774,6 +790,17 @@ body::before{content:'';position:fixed;inset:0;background:
     <div class="actions">
       <button class="btn btn-secondary" onclick="closeModal('modalDraftPick')">Schließen</button>
     </div>
+  </div>
+</div>
+
+<!-- Pick-Notification: wenn ein anderer Mitspieler/Admin gepickt hat -->
+<div class="pick-notif-overlay" id="pickNotifOverlay" onclick="hidePickNotification()">
+  <div class="pick-notif-card">
+    <div class="pn-icon">🏌️</div>
+    <div class="pn-who">PICK</div>
+    <div class="pn-member" id="pickNotifMember"></div>
+    <div class="pn-arrow">▾</div>
+    <div class="pn-golfer" id="pickNotifGolfer"></div>
   </div>
 </div>
 
@@ -2376,7 +2403,18 @@ function subscribeDraftRealtime() {
       if (S.poolPicks.some(p => p.id === payload.new.id)) return;
       S.poolPicks.push(payload.new);
       const member = S.poolMembers.find(m => m.id === payload.new.member_id);
-      if (member) showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
+      // Pop-Up nur für die anderen (nicht den, der gerade selbst gepickt hat).
+      // Bei Admin-Override für Mitspieler X: X bekommt das Pop-Up auch, weil
+      // sein Pick "von außen" gemacht wurde.
+      if (member) {
+        const pickedBySomeoneElse = member.user_id !== S.userId
+          || (S.adminPickOverride && member.user_id === S.userId);
+        if (pickedBySomeoneElse) {
+          showPickNotification(memberName(member), payload.new.golfer_name);
+        } else {
+          showToast(`${memberName(member)}: ${payload.new.golfer_name}`);
+        }
+      }
       // Race-Fix: pickGolfer schreibt erst INSERT pool_picks, DANN UPDATE
       // pools.current_pick_deadline. Wenn wir die Deadline jetzt sofort aus DB
       // holen, kann der alte Wert zurückkommen — die Folge waren Auto-Pick-
@@ -2539,8 +2577,30 @@ function stopPickTimer() {
 
 async function tickPickTimer() {
   const pool = S.activePool;
-  if (!pool || pool.status !== 'drafting') { stopPickTimer(); return; }
+  if (!pool || pool.status !== 'drafting') {
+    // Modal-Timer leeren falls offen
+    const mt = document.getElementById('modalPickTimer');
+    if (mt) { mt.textContent = ''; mt.classList.remove('low'); }
+    stopPickTimer();
+    return;
+  }
   const remaining = remainingPickSeconds();
+
+  // Modal-Timer pflegen — IMMER, auch wenn Tab nicht 'draft'. Nur DOM-Update,
+  // keine Logik, damit der Auto-Pick-Pfad unverändert bleibt.
+  if (remaining !== _lastRemainingShown) {
+    const mt = document.getElementById('modalPickTimer');
+    if (mt) {
+      if (remaining === null) {
+        mt.textContent = '';
+        mt.classList.remove('low');
+      } else {
+        mt.textContent = remaining + 's';
+        mt.classList.toggle('low', remaining <= 5);
+      }
+    }
+  }
+
   if (remaining === null) return;
 
   // Re-render nur wenn Sekunde sich ändert und draft-Tab sichtbar ist
@@ -2548,6 +2608,8 @@ async function tickPickTimer() {
     _lastRemainingShown = remaining;
     const c = getSubContainer && getSubContainer('draft');
     if (c) renderPoolDraft(c);
+  } else if (remaining !== _lastRemainingShown) {
+    _lastRemainingShown = remaining;
   }
 
   // Safety: wenn dran und Modal noch nicht offen → öffnen (Snake-Doppel-Turn Schutz)
@@ -4468,6 +4530,13 @@ function openPoolDraftModal(opts) {
   filterGolferList();
   openModal('modalDraftPick');
   updateFab();
+  // Modal-Timer sofort befüllen (sonst leer bis zum nächsten 250ms-Tick).
+  const mt = document.getElementById('modalPickTimer');
+  if (mt) {
+    const r = remainingPickSeconds();
+    if (r === null) { mt.textContent = ''; mt.classList.remove('low'); }
+    else { mt.textContent = r + 's'; mt.classList.toggle('low', r <= 5); }
+  }
   // Auf Handys keinen Auto-Focus (würde Software-Keyboard sofort hochziehen)
 }
 
@@ -4810,6 +4879,27 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+let _pickNotifTimer = null;
+function showPickNotification(memberDisplayName, golferName) {
+  const overlay = document.getElementById('pickNotifOverlay');
+  if (!overlay) return;
+  document.getElementById('pickNotifMember').textContent = memberDisplayName;
+  document.getElementById('pickNotifGolfer').textContent = golferName;
+  overlay.style.pointerEvents = 'auto';
+  // Reflow vor .show, damit transition tatsächlich animiert
+  void overlay.offsetWidth;
+  overlay.classList.add('show');
+  if (_pickNotifTimer) clearTimeout(_pickNotifTimer);
+  _pickNotifTimer = setTimeout(hidePickNotification, 2800);
+}
+function hidePickNotification() {
+  const overlay = document.getElementById('pickNotifOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('show');
+  overlay.style.pointerEvents = 'none';
+  if (_pickNotifTimer) { clearTimeout(_pickNotifTimer); _pickNotifTimer = null; }
 }
 
 function esc(s) {
