@@ -2766,6 +2766,11 @@ async function performAutoPick() {
 
 /* ===================== Init ===================== */
 async function initApp() {
+  // ESPN-Fetch SOFORT starten — parallel zu Pool/Profile-Loads.
+  // Leaderboard rendert sofort sobald Daten da sind; Rangliste sobald Pool zusätzlich da ist.
+  // Generic ESPN_GOLF_URL liefert das aktuell laufende PGA-Event — passt für den Live-Pool.
+  fetchLiveScores();
+
   // Pool laden wenn eingeloggt
   if (!S.isGuest && S.userId) {
     const params = new URLSearchParams(window.location.search);
@@ -2775,24 +2780,31 @@ async function initApp() {
       window.history.replaceState({}, '', location.pathname);
     }
     await loadActivePool();
+
+    // loadPoolData + loadTournament parallel (beide brauchen nur S.activePool)
+    const parallelLoads = [loadTournament()];
     if (S.activePool) {
-      await loadPoolData();
+      parallelLoads.push(loadPoolData());
       subscribeDraftRealtime();
       subscribePoolRealtime();
       subscribePoolPresence();
       if (S.activePool.status === 'drafting') ensurePickTimer();
     }
+    await Promise.all(parallelLoads);
+
     // Setup identity from auth
     if (S.userProfile) {
       S.myName = S.userProfile.name;
     }
+  } else {
+    await loadTournament();
   }
 
-  // Tournament + Field laden (immer — auch ohne Pool, für standalone Leaderboard)
-  await loadTournament();
-
-  // Always fetch ESPN live data (works for guests too)
-  fetchLiveScores();
+  // Falls das Tournament ein spezifisches ESPN-Event referenziert, nochmal
+  // mit Event-ID nachziehen (genauer als der Generic-Fetch oben).
+  if (S.tournament?.espn_event_id) {
+    fetchLiveScores();
+  }
 
   updateTabs();
   const defaultTab = 'leaderboard';  // immer auf Leaderboard starten
