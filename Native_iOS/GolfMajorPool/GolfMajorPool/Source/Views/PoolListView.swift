@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Eingangs-Screen nach Login. Verhalten wie in der PWA:
+/// - Genau 1 nicht-finished Pool → direkt in den Pool springen (Auto-Open).
+/// - 0 Pools → Empty-State mit Beitreten-Button.
+/// - 2+ Pools → Liste, manuelle Auswahl.
 struct PoolListView: View {
     @Environment(AuthService.self) private var auth
     @State private var pools: [Pool] = []
@@ -7,6 +11,10 @@ struct PoolListView: View {
     @State private var loadError: String?
     @State private var showJoinSheet = false
     @State private var showAccountSheet = false
+    @State private var autoOpenPoolID: UUID?
+
+    /// `nil` solange Liste noch nie geladen — verhindert Empty-State-Flicker beim Start.
+    private var firstLoadDone: Bool { !isLoading || !pools.isEmpty || loadError != nil }
 
     var body: some View {
         NavigationStack {
@@ -28,34 +36,10 @@ struct PoolListView: View {
 
                     ScrollView {
                         VStack(spacing: 12) {
-                            HStack {
-                                Text("DEINE POOLS")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .tracking(2)
-                                    .foregroundStyle(Theme.text3)
-                                Spacer()
-                                Button {
-                                    showJoinSheet = true
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 12, weight: .bold))
-                                        Text("Beitreten")
-                                            .font(.system(size: 13, weight: .semibold))
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Theme.accent)
-                                    .foregroundStyle(.white)
-                                    .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.top, 18)
-                            .padding(.bottom, 4)
+                            headerRow
 
                             if isLoading && pools.isEmpty {
-                                ProgressView().padding(.top, 40)
+                                ProgressView().padding(.top, 60)
                             } else if let err = loadError {
                                 errorBox(err)
                             } else if pools.isEmpty {
@@ -75,17 +59,55 @@ struct PoolListView: View {
                         .padding(.bottom, 30)
                     }
                 }
+
+                // Auto-Open via unsichtbarer NavigationLink
+                NavigationLink(
+                    destination: autoOpenPoolID.map { PoolDetailView(poolID: $0) },
+                    isActive: Binding(
+                        get: { autoOpenPoolID != nil },
+                        set: { if !$0 { autoOpenPoolID = nil } }
+                    )
+                ) { EmptyView() }
+                .hidden()
             }
             .navigationBarHidden(true)
-            .refreshable { await load() }
-            .task { await load() }
+            .refreshable { await load(autoOpen: false) }
+            .task { await load(autoOpen: true) }
             .sheet(isPresented: $showJoinSheet) {
-                JoinPoolSheet { await load() }
+                JoinPoolSheet { await load(autoOpen: true) }
             }
             .sheet(isPresented: $showAccountSheet) {
                 AccountSheet()
             }
         }
+    }
+
+    private var headerRow: some View {
+        HStack {
+            Text("DEINE POOLS")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(2)
+                .foregroundStyle(Theme.text3)
+            Spacer()
+            Button {
+                showJoinSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Beitreten")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Theme.accent)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 18)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -94,11 +116,22 @@ struct PoolListView: View {
             Text("Noch keinem Pool beigetreten")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
-            Text("Tippe oben rechts auf **Beitreten** und gib einen Invite-Code ein.")
+            Text("Tippe oben rechts auf **Beitreten** und gib einen Invite-Code ein. Den bekommst du von dem Freund, der den Pool erstellt hat.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
+            Button { showJoinSheet = true } label: {
+                Text("Mit Code beitreten")
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 12)
+                    .background(Theme.accent)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
         }
         .padding(.top, 40)
         .padding(.bottom, 60)
@@ -114,26 +147,31 @@ struct PoolListView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func load() async {
+    private func load(autoOpen: Bool) async {
         isLoading = true
         loadError = nil
         defer { isLoading = false }
         do {
             pools = try await PoolService.shared.fetchPoolsForCurrentUser()
+            if autoOpen {
+                let active = pools.filter { !$0.isFinished }
+                if active.count == 1, autoOpenPoolID == nil {
+                    autoOpenPoolID = active.first?.id
+                }
+            }
         } catch {
             loadError = error.localizedDescription
         }
     }
 }
 
-// MARK: - Pool Card (PWA `.lb-entry` Style)
+// MARK: - Pool Card
 
 private struct PoolCard: View {
     let pool: Pool
 
     var body: some View {
         HStack(spacing: 14) {
-            // Trophy-Initial im Round Badge
             ZStack {
                 Circle()
                     .fill(Theme.accent)
@@ -198,10 +236,11 @@ private struct StatusBadge: View {
 
     private var label: String {
         switch status {
-        case "draft":    return "Draft"
-        case "active":   return "Live"
-        case "finished": return "Beendet"
-        default:         return status
+        case "lobby":             return "Lobby"
+        case "draft", "drafting": return "Draft"
+        case "active":            return "Live"
+        case "finished":          return "Beendet"
+        default:                  return status
         }
     }
     private var color: Color {
@@ -264,6 +303,12 @@ private struct JoinPoolSheet: View {
                             .background(Theme.redDim)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+
+                    Text("Den Code bekommst du vom Freund, der den Pool angelegt hat. Pool-Erstellen läuft aktuell über die Web-App.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.text3)
+                        .padding(.top, 4)
+
                     Spacer()
                 }
                 .padding(20)
