@@ -3968,50 +3968,128 @@ function renderPayoutsTab() {
   if (!c || !S.activePool) { if (c) c.innerHTML = '<div class="empty">Kein aktiver Pool</div>'; return; }
   const pool = S.activePool;
   const numMembers = S.poolMembers.length;
-  const pot = numMembers * (pool.entry_fee || 0);
-  const ranking = getPoolRanking().filter(r => !r.isEliminated);
-  const withPayouts = calcPayouts(pot, ranking);
   const entryFee = pool.entry_fee || 0;
+  const pot = numMembers * entryFee;
+  const fullRanking = getPoolRanking();
+  const activeRanking = fullRanking.filter(r => !r.isEliminated);
+  const withPayouts = calcPayouts(pot, activeRanking);
 
-  // My member
   const myMember = S.poolMembers.find(m => m.user_id === S.userId);
   const myName = myMember ? memberName(myMember) : null;
+  const myRow = myName ? withPayouts.find(r => r.name === myName) : null;
+  const myActiveIdx = myRow ? withPayouts.indexOf(myRow) : -1;
 
-  // Podium (top 3)
-  const top3 = withPayouts.slice(0, Math.min(3, withPayouts.length));
-  // Reorder for podium: [2nd, 1st, 3rd]
-  const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
-  const barHeights = [64, 44, 28];
-  const barClasses = ['p1', 'p2', 'p3'];
-  const placeLabels = ['gold', 'silver', 'bronze'];
+  // ===== Podium mit Tie-Handling (T1. / T2. etc.) =====
+  function buildPodium() {
+    if (withPayouts.length === 0) return '';
+    const barClasses = { 1: 'p1', 2: 'p2', 3: 'p3' };
+    const placeColors = { 1: 'gold', 2: 'silver', 3: 'bronze' };
 
-  let html = `<div style="font-family:var(--font-display);font-size:18px;color:var(--text);margin-bottom:4px">${esc(pool.name)}</div>`;
-  html += `<div style="font-size:12px;color:var(--text2);margin-bottom:16px">${numMembers} Mitspieler · Pot: ${fmtMoney(pot)}</div>`;
+    const entries = [];
+    let rank = 1, i = 0;
+    while (i < withPayouts.length && rank <= 3) {
+      const total = withPayouts[i].total;
+      const tied = [];
+      for (let j = i; j < withPayouts.length && withPayouts[j].total === total; j++) tied.push(j);
+      const label = tied.length > 1 ? 'T' + rank + '.' : rank + '.';
+      for (const j of tied) {
+        entries.push({ rank, label, data: withPayouts[j] });
+      }
+      rank += tied.length;
+      i += tied.length;
+    }
+    if (entries.length === 0) return '';
 
-  // Podium
-  if (top3.length >= 3) {
-    const podiumItems = [
-      { data: top3[1], place: 2, cls: 'silver', bar: 'p2' },
-      { data: top3[0], place: 1, cls: 'gold', bar: 'p1' },
-      { data: top3[2], place: 3, cls: 'bronze', bar: 'p3' }
-    ];
-    html += '<div class="podium">';
-    podiumItems.forEach(p => {
-      const isMine = p.data.name === myName;
-      html += `<div class="podium-slot${isMine ? ' mine' : ''}">
-        <div class="podium-place ${p.cls}">${p.place}.</div>
-        <div class="podium-name">${esc(p.data.name)}</div>
-        <div class="podium-amount">${fmtMoney(p.data.payout)}</div>
-        <div class="podium-bar ${p.bar}"></div>
+    const r1 = entries.filter(e => e.rank === 1);
+    const r2 = entries.filter(e => e.rank === 2);
+    const r3plus = entries.filter(e => e.rank >= 3);
+    const order = [...r2, ...r1, ...r3plus];
+
+    let out = '<div class="podium" style="flex-wrap:wrap">';
+    order.forEach(e => {
+      const isMine = e.data.name === myName;
+      out += `<div class="podium-slot${isMine ? ' mine' : ''}">
+        <div class="podium-place ${placeColors[e.rank] || 'bronze'}">${e.label}</div>
+        <div class="podium-name">${esc(e.data.name)}</div>
+        <div class="podium-amount">${fmtMoney(e.data.payout)}</div>
+        <div class="podium-bar ${barClasses[e.rank] || 'p3'}"></div>
       </div>`;
     });
-    html += '</div>';
+    out += '</div>';
+    return out;
   }
 
-  // Full ranking with payouts
-  html += '<div class="payout-card open"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Rangliste<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body">';
+  // ===== Transfers berechnen =====
+  const balances = withPayouts.map(r => ({ name: r.name, net: Math.round((r.payout - entryFee) * 100) / 100 }));
+  const cBal = balances.filter(b => b.net > 0).sort((a, b) => b.net - a.net).map(c => ({ ...c, remaining: c.net }));
+  const dBal = balances.filter(b => b.net < 0).sort((a, b) => a.net - b.net).map(d => ({ ...d, remaining: -d.net }));
+  const transfers = [];
+  let ci = 0, di = 0;
+  while (ci < cBal.length && di < dBal.length) {
+    const amount = Math.min(cBal[ci].remaining, dBal[di].remaining);
+    if (amount > 0.01) {
+      transfers.push({ from: dBal[di].name, to: cBal[ci].name, amount: Math.round(amount * 100) / 100 });
+    }
+    cBal[ci].remaining -= amount;
+    dBal[di].remaining -= amount;
+    if (cBal[ci].remaining < 0.01) ci++;
+    if (dBal[di].remaining < 0.01) di++;
+  }
+
+  let html = '';
+
+  // ===== Stats-Row =====
+  const p1Amount = withPayouts[0]?.payout || 0;
+  html += `<div class="stats-row">
+    <div class="stat-card"><div class="stat-val" style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--text)">${numMembers}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mitspieler</div></div>
+    <div class="stat-card"><div class="stat-val" style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--text)">${fmtMoney(pot)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Pot</div></div>
+    <div class="stat-card"><div class="stat-val" style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--green)">${fmtMoney(p1Amount)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">1. Platz</div></div>
+  </div>`;
+
+  // ===== Podium =====
+  html += buildPodium();
+
+  // ===== Persönliche Summary-Karte (wenn User Member ist) =====
+  if (myRow) {
+    const myNet = myRow.payout - entryFee;
+    const netColor = myNet > 0 ? 'var(--green)' : myNet < 0 ? 'var(--red)' : 'var(--text)';
+    const posText = myMember && fullRanking.find(r => r.name === myName)?.isEliminated
+      ? 'Eliminiert'
+      : `Platz ${myActiveIdx + 1} von ${activeRanking.length}`;
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+      <div style="font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${esc(myName)}</div>
+      <div style="font-family:var(--font-display);font-size:40px;font-weight:700;color:${netColor};margin:8px 0">${myNet >= 0 ? '+' : ''}${fmtMoney(myNet)}</div>
+      <div style="font-size:12px;color:var(--text3)">${posText}</div>
+    </div>`;
+
+    // ===== Meine Transfers ("Du bekommst" / "Du zahlst") =====
+    const myTransfers = transfers.filter(t => t.from === myName || t.to === myName);
+    if (myTransfers.length > 0) {
+      html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);margin-bottom:16px">
+        <div class="transfer-section">
+          <div class="transfer-section-title">${myNet >= 0 ? 'Du bekommst' : 'Du zahlst'}</div>`;
+      const initials = name => (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      myTransfers.forEach(t => {
+        const isPayingTo = t.from === myName;
+        const otherName = isPayingTo ? t.to : t.from;
+        html += `<div class="transfer-card mine">
+          <div class="transfer-avatar ${isPayingTo ? 'debtor' : 'creditor'}">${esc(initials(isPayingTo ? myName : otherName))}</div>
+          <div class="transfer-from">${isPayingTo ? 'Du' : esc(otherName)}</div>
+          <div class="transfer-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="transfer-to">${isPayingTo ? esc(otherName) : 'Du'}</div>
+          <div class="transfer-avatar ${isPayingTo ? 'creditor' : 'debtor'}">${esc(initials(isPayingTo ? otherName : myName))}</div>
+          <div class="transfer-amount">${fmtMoney(t.amount)}</div>
+        </div>`;
+      });
+      html += '</div></div>';
+    } else if (myNet === 0) {
+      html += `<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px;margin-bottom:8px">Keine Zahlungen nötig</div>`;
+    }
+  }
+
+  // ===== Volle Rangliste (accordion, collapsed) =====
+  html += '<div class="payout-card"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Volle Rangliste<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body">';
   withPayouts.forEach((r, i) => {
-    const net = r.payout - entryFee;
     const isMine = r.name === myName;
     html += `<div class="payout-row${isMine ? ' mine' : ''}">
       <span style="min-width:28px;font-weight:600">${i + 1}.</span>
@@ -4022,27 +4100,9 @@ function renderPayoutsTab() {
   });
   html += '</div></div>';
 
-  // Transfers (wer schuldet wem)
-  const balances = withPayouts.map(r => ({ name: r.name, net: Math.round((r.payout - entryFee) * 100) / 100 }));
-  const creditors = balances.filter(b => b.net > 0).sort((a, b) => b.net - a.net);
-  const debtors = balances.filter(b => b.net < 0).sort((a, b) => a.net - b.net);
-  const transfers = [];
-  let ci = 0, di = 0;
-  const cBal = creditors.map(c => ({ ...c }));
-  const dBal = debtors.map(d => ({ ...d, net: Math.abs(d.net) }));
-  while (ci < cBal.length && di < dBal.length) {
-    const amount = Math.min(cBal[ci].net, dBal[di].net);
-    if (amount > 0.01) {
-      transfers.push({ from: dBal[di].name, to: cBal[ci].name, amount: Math.round(amount * 100) / 100 });
-    }
-    cBal[ci].net -= amount;
-    dBal[di].net -= amount;
-    if (cBal[ci].net < 0.01) ci++;
-    if (dBal[di].net < 0.01) di++;
-  }
-
+  // ===== Volle Abrechnung (accordion, collapsed) =====
   if (transfers.length > 0) {
-    html += '<div class="payout-card open"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Abrechnung<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body"><div class="transfer-section">';
+    html += '<div class="payout-card"><div class="payout-card-header" onclick="this.parentElement.classList.toggle(\'open\')">Alle Zahlungen<span class="toggle-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="payout-card-body"><div class="transfer-section">';
     const initials = name => (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     transfers.forEach(t => {
       const isMine = t.from === myName || t.to === myName;
