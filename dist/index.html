@@ -1803,8 +1803,18 @@ function calcPoolTeamRoundScore(memberId, round) {
     if (status === 'wd' || status === 'dq') continue;
     if (round >= 3 && status === 'cut') continue;
     const sc = getPoolGolferScore(p.golfer_name, round);
+    let toPar = null;
     if (sc !== null) {
-      const toPar = sc - par;
+      toPar = sc - par;
+    } else {
+      // Mid-round: live toPar der laufenden Runde verwenden
+      const live = matchGolferToLive(p.golfer_name);
+      if (live && live.currentRound === round && !live.finished) {
+        const rtp = live['r' + round + '_toPar'];
+        if (rtp !== undefined && rtp !== null) toPar = rtp;
+      }
+    }
+    if (toPar !== null) {
       const bonus = round === 1 ? getPoolGolferBonus(p.golfer_name) : 0;
       roundScores.push(toPar - bonus);
     }
