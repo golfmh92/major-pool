@@ -3461,7 +3461,9 @@ function showScorecardByName(playerName) {
 }
 
 // Aronimink Golf Club Pars (PGA Championship 2026, Par 70)
-const ARONIMINK_PARS = [4,4,4,4,3,4,4,4,4, 4,4,3,4,4,5,3,4,4];
+// Aronimink Pars für PGA Championship 2026 — verifiziert mit ESPN-Scorecards
+// (score - rel über alle Spieler/Runden, Konsens-Voting)
+const ARONIMINK_PARS = [4,4,4,4,3,4,4,3,5, 4,4,4,4,3,4,5,3,4];
 
 function renderScorecardContent(name, live) {
   const poolPar = (S.activePool?.par) || PAR;
