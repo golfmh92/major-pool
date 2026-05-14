@@ -5,7 +5,7 @@ struct PoolUser: Codable, Identifiable, Hashable {
     let name: String
     let email: String
     let avatarInitials: String?
-    let createdAt: Date
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id

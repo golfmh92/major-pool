@@ -67,8 +67,8 @@ private struct MemberRow: View {
     var body: some View {
         HStack(spacing: 12) {
             InitialsBubble(initials: Fmt.initials(row.displayName),
-                           color: row.member.isAdmin ? Theme.red
-                                : (row.member.isPlaceholder ? Theme.text3 : Theme.accent))
+                           color: row.member.isAdminBool ? Theme.red
+                                : (row.member.isPlaceholderBool ? Theme.text3 : Theme.accent))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -78,7 +78,7 @@ private struct MemberRow: View {
                     if isMe {
                         pill("DU", bg: Theme.accent, fg: .white)
                     }
-                    if row.member.isPlaceholder {
+                    if row.member.isPlaceholderBool {
                         pill("PLATZHALTER", bg: Theme.bg3, fg: Theme.text2)
                     }
                 }
@@ -88,7 +88,7 @@ private struct MemberRow: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.text2)
                     }
-                    if row.member.isAdmin {
+                    if row.member.isAdminBool {
                         pill("ADMIN", bg: Theme.redDim, fg: Theme.red)
                     }
                 }

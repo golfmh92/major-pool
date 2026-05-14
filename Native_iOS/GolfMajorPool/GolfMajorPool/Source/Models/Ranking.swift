@@ -127,7 +127,7 @@ struct PlayerRanking: Identifiable, Hashable {
                 memberId: m.id,
                 userId: m.userId,
                 name: displayName,
-                isPlaceholder: m.isPlaceholder,
+                isPlaceholder: m.isPlaceholderBool,
                 golferNames: golferNames,
                 scoresByGolfer: scoresByGolfer,
                 roundScores: rounds,
@@ -247,14 +247,14 @@ enum GolferLookup {
         if let live = liveScores[normalize(name)], let s = live.outStatus,
            let st = GolferStatus(rawValue: s) { return st }
         if let tg = tournamentGolfers.first(where: { $0.name == name }),
-           tg.status != "active", let st = GolferStatus(rawValue: tg.status) {
+           tg.statusValue != "active", let st = GolferStatus(rawValue: tg.statusValue) {
             return st
         }
         return .active
     }
 
     static func bonus(for name: String, bonuses: [PoolBonus]) -> Int {
-        bonuses.filter { $0.golferName == name }.reduce(0) { $0 + $1.shots }
+        bonuses.filter { $0.golferName == name }.reduce(0) { $0 + $1.shotsValue }
     }
 
     /// "Tiger Woods (a)" → "tiger woods". Fuzzy-match key.

@@ -4,11 +4,11 @@ struct PoolPick: Codable, Identifiable, Hashable {
     let id: UUID
     let poolId: UUID
     let userId: UUID?
-    let memberId: UUID
+    let memberId: UUID?
     let golferName: String
     let draftRound: Int
     let draftPick: Int
-    let createdAt: Date
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id

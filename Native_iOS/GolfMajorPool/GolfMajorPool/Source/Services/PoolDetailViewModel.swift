@@ -90,7 +90,7 @@ final class PoolDetailViewModel {
 
     var iAmAdmin: Bool {
         guard let b = bundle, let uid = AuthService.shared.userID else { return false }
-        return b.members.contains { $0.userId == uid && $0.isAdmin }
+        return b.members.contains { $0.userId == uid && $0.isAdminBool }
     }
 
     var myMember: PoolMember? {

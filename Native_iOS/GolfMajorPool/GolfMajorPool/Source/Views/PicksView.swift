@@ -107,7 +107,7 @@ private struct TeamCard: View {
             Button { withAnimation { expanded.toggle() } } label: {
                 HStack(spacing: 12) {
                     InitialsBubble(initials: Fmt.initials(name),
-                                   color: member.isAdmin ? Theme.red : Theme.accent)
+                                   color: member.isAdminBool ? Theme.red : Theme.accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name)
                             .font(.system(size: 14, weight: .semibold))

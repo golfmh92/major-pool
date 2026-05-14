@@ -11,7 +11,7 @@ struct Pool: Codable, Identifiable, Hashable {
     let status: String
     let inviteCode: String?
     let createdBy: UUID?
-    let createdAt: Date
+    let createdAt: Date?
     let currentPickDeadline: Date?
     let pickSeconds: Int?
     let picksPerMember: Int?

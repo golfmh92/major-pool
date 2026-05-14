@@ -91,7 +91,7 @@ struct AdminView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.text)
                     Spacer()
-                    if m.isAdmin {
+                    if m.isAdminBool {
                         Text("ADMIN")
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 5)
@@ -127,13 +127,13 @@ struct AdminView: View {
             ForEach(orderedMembers, id: \.id) { m in
                 HStack(spacing: 10) {
                     InitialsBubble(initials: Fmt.initials(memberName(m)),
-                                   color: m.isAdmin ? Theme.red : Theme.accent)
+                                   color: m.isAdminBool ? Theme.red : Theme.accent)
                         .scaleEffect(0.9)
                     Text(memberName(m))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.text)
                     Spacer()
-                    if !m.isAdmin {
+                    if !m.isAdminBool {
                         Button {
                             Task { await kick(m) }
                         } label: {

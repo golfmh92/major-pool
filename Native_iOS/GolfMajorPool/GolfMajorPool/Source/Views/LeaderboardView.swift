@@ -50,7 +50,7 @@ struct LeaderboardView: View {
             }()
 
             var ownerName: String? = nil
-            if let pick = picksByName[key], let m = memberByID[pick.memberId] {
+            if let pick = picksByName[key], let mid = pick.memberId, let m = memberByID[mid] {
                 if let uid = m.userId, let u = userByID[uid] { ownerName = u.name }
                 else if let dn = m.displayName, !dn.isEmpty { ownerName = dn }
                 else { ownerName = "Platzhalter" }

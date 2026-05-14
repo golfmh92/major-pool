@@ -6,7 +6,7 @@ struct PoolScore: Codable, Identifiable, Hashable {
     let golferName: String
     let round: Int
     let score: Int
-    let createdAt: Date
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id

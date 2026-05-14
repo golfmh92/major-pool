@@ -4,7 +4,7 @@ struct PoolResult: Codable, Identifiable, Hashable {
     let id: UUID
     let poolId: UUID
     let snapshot: ResultSnapshot
-    let createdAt: Date
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -15,8 +15,8 @@ struct PoolResult: Codable, Identifiable, Hashable {
 }
 
 struct ResultSnapshot: Codable, Hashable {
-    let name: String
-    let pot: Double
+    let name: String?
+    let pot: Double?
     let entryFee: Double?
     let payouts: [PayoutEntry]?
     let ranking: [RankingEntry]?
@@ -31,11 +31,11 @@ struct ResultSnapshot: Codable, Hashable {
 }
 
 struct PayoutEntry: Codable, Hashable {
-    let name: String
-    let amount: Double
+    let name: String?
+    let amount: Double?
 }
 
 struct RankingEntry: Codable, Hashable {
-    let name: String
+    let name: String?
     let total: Int?
 }

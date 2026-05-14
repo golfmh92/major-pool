@@ -126,7 +126,7 @@ struct DraftView: View {
                             InitialsBubble(initials: Fmt.initials(memberDisplayName(m)),
                                            color: currentMember?.id == m.id
                                            ? Theme.red
-                                           : (m.isAdmin ? Theme.accent : Theme.text3))
+                                           : (m.isAdminBool ? Theme.accent : Theme.text3))
                             Text("#\(m.draftPosition ?? 0)")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(Theme.text3)

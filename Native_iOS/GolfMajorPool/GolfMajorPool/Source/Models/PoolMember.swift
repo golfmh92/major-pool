@@ -5,10 +5,10 @@ struct PoolMember: Codable, Identifiable, Hashable {
     let poolId: UUID
     let userId: UUID?
     let draftPosition: Int?
-    let isAdmin: Bool
+    let isAdmin: Bool?
     let displayName: String?
-    let isPlaceholder: Bool
-    let joinedAt: Date
+    let isPlaceholder: Bool?
+    let joinedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -20,4 +20,7 @@ struct PoolMember: Codable, Identifiable, Hashable {
         case isPlaceholder = "is_placeholder"
         case joinedAt      = "joined_at"
     }
+
+    var isAdminBool: Bool { isAdmin ?? false }
+    var isPlaceholderBool: Bool { isPlaceholder ?? false }
 }
