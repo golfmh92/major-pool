@@ -3023,10 +3023,12 @@ function renderRangliste() {
     `<button class="round-tab${rd === i ? ' active' : ''}" onclick="setLbRound(${i})">${d}</button>`
   ).join('')}</div>`;
 
-  // FLIP: capture old positions
+  // FLIP: capture old positions + open-State der Accordions
   const oldPositions = {};
+  const openEntries = new Set();
   c.querySelectorAll('.lb-entry[data-id]').forEach(el => {
     oldPositions[el.dataset.id] = el.getBoundingClientRect().top;
+    if (el.classList.contains('open')) openEntries.add(el.dataset.id);
   });
 
   if (filtered.length === 0) {
@@ -3128,6 +3130,16 @@ function renderRangliste() {
   });
 
   c.innerHTML = html;
+
+  // Open-State der Accordions wiederherstellen — bei aktivem Filter alle auf
+  if (filterVal) {
+    c.querySelectorAll('.lb-entry[data-id]').forEach(el => el.classList.add('open'));
+  } else {
+    openEntries.forEach(id => {
+      const el = c.querySelector(`.lb-entry[data-id="${id}"]`);
+      if (el) el.classList.add('open');
+    });
+  }
 
   // FLIP animation
   if (Object.keys(oldPositions).length > 0) {
