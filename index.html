@@ -3356,7 +3356,7 @@ function renderLeaderboardTab() {
   // Render entries
   const poolPar = (S.activePool?.par) || PAR;
 
-  function renderGolferEntry(name, data, showFavStar) {
+  function renderGolferEntry(name, data, showFavStar, flipKey) {
     const isMine = myGolferNames.has(normalizeName(name));
     const owners = golferOwners[name];
     const isFav = favSet.has(name);
@@ -3391,7 +3391,7 @@ function renderLeaderboardTab() {
       teeTimeHtml = `<div style="font-size:10px;color:var(--text3);text-align:right">${fmtTeeTime(data.teeTime, data.startHole)}</div>`;
     }
 
-    return `<div class="lb-entry${isCut ? ' eliminated' : ''}${isMine ? ' mine' : ''}" data-name="${esc(name)}" style="cursor:pointer" onclick="showScorecardByName('${esc(name).replace(/'/g, "\\'")}')">
+    return `<div class="lb-entry${isCut ? ' eliminated' : ''}${isMine ? ' mine' : ''}" data-name="${esc(name)}" data-flip-key="${esc(flipKey || name)}" style="cursor:pointer" onclick="showScorecardByName('${esc(name).replace(/'/g, "\\'")}')">
       <div class="lb-rank" style="font-size:14px">${data.position || ''}</div>
       ${data.headshot ? `<img class="mg-avatar" src="${data.headshot}" onerror="this.style.display='none'" style="width:28px;height:28px">` : ''}
       <div class="lb-info" style="min-width:0;flex:1">
@@ -3409,10 +3409,11 @@ function renderLeaderboardTab() {
     </div>`;
   }
 
-  // Favoriten-Sektion oben (Spieler erscheinen zusätzlich an ihrer normalen Position weiter unten)
+  // Favoriten-Sektion oben (Spieler erscheinen zusätzlich an ihrer normalen Position weiter unten).
+  // Eindeutiger flipKey-Prefix damit FLIP-Animation oben/unten nicht kollidiert.
   if (favEntries.length > 0) {
     html += '<div class="fav-divider">⭐ Favoriten</div>';
-    html += favEntries.map(([name, data]) => renderGolferEntry(name, data, true)).join('');
+    html += favEntries.map(([name, data]) => renderGolferEntry(name, data, true, 'fav-' + name)).join('');
     html += '<div class="fav-divider">Komplettes Leaderboard</div>';
   }
 
@@ -3432,25 +3433,24 @@ function renderLeaderboardTab() {
       </div>`;
       cutInserted = true;
     }
-    html += renderGolferEntry(name, data, true);
+    html += renderGolferEntry(name, data, true, 'lb-' + name);
   });
 
-  // FLIP animation
+  // FLIP animation — Keying via data-flip-key (eindeutig pro Sektion oben/unten)
   const list = c;
   const oldPositions = {};
-  list.querySelectorAll('.lb-entry[data-name]').forEach(el => {
-    oldPositions[el.dataset.name] = el.getBoundingClientRect().top;
+  list.querySelectorAll('.lb-entry[data-flip-key]').forEach(el => {
+    oldPositions[el.dataset.flipKey] = el.getBoundingClientRect().top;
   });
 
   c.innerHTML = html;
 
-  // FLIP animation — synchron nach innerHTML (kein outer rAF, sonst Doppel-Sprung)
   if (Object.keys(oldPositions).length > 0) {
-    list.querySelectorAll('.lb-entry[data-name]').forEach(el => {
-      const name = el.dataset.name;
-      if (oldPositions[name] === undefined) return;
+    list.querySelectorAll('.lb-entry[data-flip-key]').forEach(el => {
+      const key = el.dataset.flipKey;
+      if (oldPositions[key] === undefined) return;
       const newTop = el.getBoundingClientRect().top;
-      const delta = oldPositions[name] - newTop;
+      const delta = oldPositions[key] - newTop;
       if (Math.abs(delta) < 2) return;
       el.style.transform = `translateY(${delta}px)`;
       el.style.transition = 'none';
