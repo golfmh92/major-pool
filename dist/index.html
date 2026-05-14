@@ -997,6 +997,7 @@ let S = {
   myName: '',
   // Live scoring (ESPN)
   liveScores: {},
+  coursePars: null,  // dynamisch aus ESPN-Scorecards befüllt (hole → par)
   liveEventName: '',
   liveLastUpdate: null,
   liveTimer: null,
@@ -2118,6 +2119,37 @@ async function fetchLiveScores() {
         sortOrder: c.sortOrder || 999
       };
     }
+
+    // Course-Pars dynamisch aus ESPN-Scorecards ableiten (Konsens über alle Spieler).
+    // Damit ist die App tournament-agnostisch — kein Hardcoding nötig.
+    const parEnumMap = { 'Birdie': -1, 'Eagle': -2, 'Albatross': -3, 'Bogey': 1, 'Double Bogey': 2, 'Triple Bogey': 3, 'Par': 0 };
+    const parVotes = {};
+    for (const s of Object.values(scores)) {
+      for (let r = 1; r <= 4; r++) {
+        for (const h of (s.holes?.['r' + r] || [])) {
+          if (!h.score || !h.hole) continue;
+          let rel = null;
+          if (h.par === 'E') rel = 0;
+          else if (typeof h.par === 'number') rel = h.par;
+          else if (typeof h.par === 'string') {
+            const parsed = parseInt(h.par);
+            if (!isNaN(parsed)) rel = parsed;
+            else if (parEnumMap[h.par] !== undefined) rel = parEnumMap[h.par];
+          }
+          if (rel === null) continue;
+          const par = h.score - rel;
+          if (par < 3 || par > 6) continue;
+          parVotes[h.hole] = parVotes[h.hole] || {};
+          parVotes[h.hole][par] = (parVotes[h.hole][par] || 0) + 1;
+        }
+      }
+    }
+    const coursePars = {};
+    for (const [hole, votes] of Object.entries(parVotes)) {
+      const top = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+      if (top) coursePars[parseInt(hole)] = parseInt(top[0]);
+    }
+    if (Object.keys(coursePars).length > 0) S.coursePars = coursePars;
 
     // Auto-detect cut: Top N + Ties
     const allScores = Object.values(scores);
@@ -3558,27 +3590,27 @@ function renderScorecardContent(name, live) {
     return;
   }
 
-  // Helper: ermittle Loch-Par (entweder von ESPN-Daten oder Aronimink-Fallback)
+  // Helper: ermittle Loch-Par — bevorzugt dynamische Pars aus ESPN-Konsens
   function getHolePar(holeNum) {
-    // Versuche aus aktiven Runden zu lesen (ESPN liefert hole.par als '-1', 'E', '+1' relativ)
+    // 1) Dynamische Course-Pars aus ESPN-Live-Daten (Konsens über alle Spieler)
+    if (S.coursePars && S.coursePars[holeNum]) return S.coursePars[holeNum];
+    // 2) Aus den Runden des aktuell angezeigten Golfers ableiten
     for (const r of activeRounds) {
       const h = (live.holes['r' + r] || []).find(x => x.hole === holeNum);
       if (h && h.score && h.par !== undefined && h.par !== null) {
-        // Numeric par-relative ('-1', 'E', '+1') von ESPN
         let rel = null;
         if (h.par === 'E') rel = 0;
         else if (typeof h.par === 'number') rel = h.par;
         else if (typeof h.par === 'string') {
           const parsed = parseInt(h.par);
           if (!isNaN(parsed)) rel = parsed;
-          // Falls ESPN-Enum-Strings
           const enumMap = { 'Birdie': -1, 'Eagle': -2, 'Albatross': -3, 'Bogey': 1, 'Double Bogey': 2, 'Triple Bogey': 3, 'Par': 0 };
           if (rel === null && enumMap[h.par] !== undefined) rel = enumMap[h.par];
         }
         if (rel !== null) return h.score - rel;
       }
     }
-    // Fallback: Aronimink Standard-Pars
+    // 3) Letzter Fallback (zB ganz am Anfang bevor ESPN-Daten da sind)
     return ARONIMINK_PARS[holeNum - 1] || 4;
   }
 
@@ -3593,8 +3625,8 @@ function renderScorecardContent(name, live) {
       const enumMap = { 'Birdie': -1, 'Eagle': -2, 'Albatross': -3, 'Bogey': 1, 'Double Bogey': 2, 'Triple Bogey': 3, 'Par': 0 };
       if (enumMap[hole.par] !== undefined) return enumMap[hole.par];
     }
-    // Fallback via Aronimink-Par
-    const ap = ARONIMINK_PARS[holeNum - 1];
+    // Fallback: dynamische Course-Pars, dann Hardcode
+    const ap = (S.coursePars && S.coursePars[holeNum]) || ARONIMINK_PARS[holeNum - 1];
     if (ap) return hole.score - ap;
     return null;
   }
