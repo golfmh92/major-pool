@@ -250,6 +250,7 @@ body::before{content:'';position:fixed;inset:0;background:
 .mg-score.over{color:#000}
 .mg-score.even{color:#2563EB}
 .mg-thru{font-size:9px;color:var(--text3);margin-top:1px}
+.mg-teetime{font-size:13px;color:var(--text3);font-weight:500;letter-spacing:0.3px;line-height:1.2;text-align:center}
 .mg-cut{font-size:8px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 5px;border-radius:4px;margin-top:2px}
 
 
@@ -3638,14 +3639,22 @@ function renderMeineGolfer() {
     return { name: p.golfer_name, live };
   });
 
-  // Sort: active by score, cut/wd last
+  // Sort: gestartet nach Score → noch nicht gestartet nach Tee-Time → cut/wd zuletzt
   golfers.sort((a, b) => {
     const aOut = a.live?.outStatus ? 1 : 0;
     const bOut = b.live?.outStatus ? 1 : 0;
     if (aOut !== bOut) return aOut - bOut;
-    const aTP = a.live?.toPar ?? 999;
-    const bTP = b.live?.toPar ?? 999;
-    return aTP - bTP;
+    const aPre = a.live?.statusState === 'pre' ? 1 : 0;
+    const bPre = b.live?.statusState === 'pre' ? 1 : 0;
+    if (aPre !== bPre) return aPre - bPre;
+    if (!aPre && !bPre) {
+      const aTP = a.live?.toPar ?? 999;
+      const bTP = b.live?.toPar ?? 999;
+      if (aTP !== bTP) return aTP - bTP;
+    }
+    const aT = a.live?.teeTime || '';
+    const bT = b.live?.teeTime || '';
+    return aT < bT ? -1 : aT > bT ? 1 : 0;
   });
 
   // Determine counting golfers (best N)
@@ -3671,6 +3680,7 @@ function renderMeineGolfer() {
     const l = g.live;
     const isCounting = counting.has(g.name);
     const isCut = l?.outStatus;
+    const isPre = l && !l.outStatus && !S.eventFinished && l.statusState === 'pre' && l.teeTime;
     const scoreDisplay = l ? fmtScore(l.toPar) : '—';
     const scoreCls = l ? (l.toPar < 0 ? 'under' : l.toPar > 0 ? 'over' : 'even') : '';
     const thru = l && !l.finished && l.thru ? l.thru : '';
@@ -3679,8 +3689,9 @@ function renderMeineGolfer() {
       ${l?.headshot ? `<img class="mg-avatar" src="${l.headshot}" onerror="this.outerHTML='<div class=mg-avatar-fb>${g.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>'">` : `<div class="mg-avatar-fb">${g.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
       <div class="mg-info">
         <div class="mg-name">${esc(shortName(g.name))}</div>
-        <div class="mg-score ${scoreCls}">${scoreDisplay}</div>
-        ${thru ? `<div class="mg-thru">${thru}</div>` : ''}
+        ${isPre
+          ? `<div class="mg-teetime">${fmtTeeTime(l.teeTime, l.startHole)}</div>`
+          : `<div class="mg-score ${scoreCls}">${scoreDisplay}</div>${thru ? `<div class="mg-thru">${thru}</div>` : ''}`}
         ${isCut ? `<div class="mg-cut">${l.outStatus === 'wd' ? 'WD' : l.outStatus === 'dq' ? 'DQ' : 'CUT'}</div>` : ''}
       </div>
     </div>`;
