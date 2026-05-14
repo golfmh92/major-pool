@@ -10,7 +10,7 @@ struct GolfMajorPoolApp: App {
             RootView()
                 .environment(auth)
                 .preferredColorScheme(.light)
-                .tint(Theme.green)
+                .tint(Theme.accent)
                 .task {
                     await auth.restoreSession()
                 }
