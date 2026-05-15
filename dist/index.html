@@ -2961,6 +2961,18 @@ function buildPodiumHtml(ranking) {
 }
 
 function setLbRound(r) { S.lbRound = r; renderRangliste(); }
+
+// Accordion-Toggle mit Auto-Scroll: nach dem Aufklappen scrollt der Container
+// so dass der ganze Eintrag (Header + ausgeklappter Inhalt) sichtbar ist.
+function toggleRanglisteEntry(el) {
+  const wasOpen = el.classList.contains('open');
+  el.classList.toggle('open');
+  if (wasOpen) return;
+  // Nach der CSS-Expand-Animation (max-height .3s) zentriert scrollen
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 320);
+}
 function clearLbFilter() {
   S.lbFilter = '';
   const inp = document.getElementById('lbFilterInput');
@@ -3143,7 +3155,7 @@ function renderRangliste() {
       </div>`;
     }).join('');
 
-    html += `<div class="lb-entry${eliminated ? ' eliminated' : ''}${isMe ? ' mine' : ''}${t._rank === 1 && !eliminated && !t._tied ? ' rank-1' : ''}" data-id="${t.member_id}" onclick="this.classList.toggle('open')" style="cursor:pointer;flex-wrap:wrap">
+    html += `<div class="lb-entry${eliminated ? ' eliminated' : ''}${isMe ? ' mine' : ''}${t._rank === 1 && !eliminated && !t._tied ? ' rank-1' : ''}" data-id="${t.member_id}" onclick="toggleRanglisteEntry(this)" style="cursor:pointer;flex-wrap:wrap">
       <div class="lb-rank">${rankDisplay}</div>
       <div style="width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
       <div class="lb-info" style="flex:1;min-width:0">
@@ -3417,21 +3429,26 @@ function renderLeaderboardTab() {
     html += '<div class="fav-divider">Komplettes Leaderboard</div>';
   }
 
-  // Cut line detection
-  const cutScore = S.actualCut ?? S.projectedCut;
-  const cutLabel = S.actualCut !== null ? 'CUT' : (S.projectedCut !== null ? 'PROJECTED CUT' : null);
+  // Cut line detection — bei actualCut ODER projectedCut (solange Event nicht finished)
+  const cutScore = S.actualCut ?? (S.eventFinished ? null : S.projectedCut);
+  const cutLabel = S.actualCut !== null ? 'CUT' : (cutScore !== null ? 'PROJECTED CUT' : null);
   let cutInserted = false;
 
   // Other entries
   otherEntries.forEach(([name, data]) => {
-    // Insert cut line before first player above cut
-    if (rd === 0 && cutLabel && !cutInserted && data.outStatus === 'cut') {
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;margin:4px 0">
-        <div style="flex:1;height:1px;background:var(--red)"></div>
-        <div style="font-size:10px;color:var(--red);font-weight:600;letter-spacing:1px">${cutLabel} ${fmtScore(cutScore)}</div>
-        <div style="flex:1;height:1px;background:var(--red)"></div>
-      </div>`;
-      cutInserted = true;
+    // Cut-Linie einfügen vor dem ersten Spieler der über dem Cut liegt
+    // (entweder bereits 'cut' markiert oder toPar > cutScore und noch aktiv)
+    if (rd === 0 && cutLabel && cutScore !== null && !cutInserted) {
+      const wouldMissCut = data.toPar !== undefined && data.toPar > cutScore
+        && data.outStatus !== 'wd' && data.outStatus !== 'dq';
+      if (wouldMissCut) {
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;margin:4px 0">
+          <div style="flex:1;height:1px;background:var(--red)"></div>
+          <div style="font-size:10px;color:var(--red);font-weight:600;letter-spacing:1px">${cutLabel} ${fmtScore(cutScore)}</div>
+          <div style="flex:1;height:1px;background:var(--red)"></div>
+        </div>`;
+        cutInserted = true;
+      }
     }
     html += renderGolferEntry(name, data, true, 'lb-' + name);
   });
@@ -3723,10 +3740,19 @@ function renderMeineGolfer() {
   const myTeam = ranking.find(r => r.member_id === myMember.id);
   const teamTotal = myTeam ? myTeam.total : null;
 
+  // Cut-Anzeige analog masters-pool
+  const cutLabel = S.actualCut !== null
+    ? `<span style="font-size:11px;color:var(--text3);font-weight:400">Cut ${fmtScore(S.actualCut)}</span>`
+    : (S.projectedCut !== null && !S.eventFinished
+      ? `<span style="font-size:11px;color:var(--text3);font-weight:400">Proj. Cut ${fmtScore(S.projectedCut)}</span>`
+      : '');
+
   let html = '<div class="mg-strip">';
-  html += `<div class="mg-title" style="display:flex;justify-content:space-between;align-items:center">
+  html += `<div class="mg-title" style="display:flex;align-items:center;gap:8px">
     <span>Meine Golfer</span>
     <span style="font-family:var(--font-display);font-size:16px;font-weight:700" class="${teamTotal !== null ? (teamTotal < 0 ? 'under' : teamTotal > 0 ? 'over' : 'even') : ''}">${teamTotal !== null ? fmtScore(teamTotal) : ''}</span>
+    <span style="flex:1"></span>
+    ${cutLabel}
   </div>`;
   html += '<div class="mg-scroll">';
 
