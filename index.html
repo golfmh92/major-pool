@@ -2151,18 +2151,29 @@ async function fetchLiveScores() {
     }
     if (Object.keys(coursePars).length > 0) S.coursePars = coursePars;
 
+    // ESPN authoritative cut info — wenn vorhanden hat das Vorrang vor unserer
+    // lokalen Berechnung. ESPN reportet:
+    //   tournament.cutScore  → höchster Score der noch den Cut macht (zB +4)
+    //   tournament.cutCount  → Anzahl Spieler die den Cut gemacht haben
+    //   tournament.cutRound  → Runde nach der gecuttet wird (idR 2)
+    const espnTournament = targetEvent.tournament || {};
+    const espnCutScore = (typeof espnTournament.cutScore === 'number') ? espnTournament.cutScore : null;
+    const espnCutCount = (typeof espnTournament.cutCount === 'number') ? espnTournament.cutCount : null;
+    // Effektives Top-N für Projektion: ESPN-Count wenn da, sonst Pool-Setting
+    const effectiveCutTop = espnCutCount || poolCutTop;
+
     // Auto-detect cut: Top N + Ties
     const allScores = Object.values(scores);
     const anyoneMidRound = allScores.some(s => !s.finished && s.currentRound > 0);
     const withR2 = allScores.filter(s => s.r1 && s.r2);
-    if (!anyoneMidRound && withR2.length > poolCutTop) {
+    if (!anyoneMidRound && withR2.length > effectiveCutTop) {
       const r2ToPar = s => (s.r1 + s.r2) - poolPar * 2;
       const sorted = [...withR2].sort((a, b) => r2ToPar(a) - r2ToPar(b));
       let proCount = 0;
       let cutScore = null;
       for (const s of sorted) {
         if (!s._amateur) proCount++;
-        if (proCount === poolCutTop) { cutScore = r2ToPar(s); break; }
+        if (proCount === effectiveCutTop) { cutScore = r2ToPar(s); break; }
       }
       if (cutScore === null) cutScore = r2ToPar(sorted[sorted.length - 1]);
       S.actualCut = cutScore;
@@ -2174,7 +2185,7 @@ async function fetchLiveScores() {
         }
       }
     }
-    // Detect cut from ESPN data
+    // Detect cut from ESPN data (cut-marked players)
     if (S.actualCut === null && allScores.some(s => s.status === 'cut' || s.outStatus === 'cut')) {
       const cutPlayers = allScores.filter(s => (s.status === 'cut' || s.outStatus === 'cut') && s.toPar !== undefined);
       if (cutPlayers.length > 0) {
@@ -2186,12 +2197,25 @@ async function fetchLiveScores() {
     S.projectedCut = null;
     if (!S.actualCut) S.actualCut = null;
     const withScores = allScores.filter(s => s.toPar !== undefined && s.status !== 'cut' && s.status !== 'wd' && s.status !== 'dq');
-    if (withScores.length > poolCutTop && !S.eventFinished) {
+    if (withScores.length > effectiveCutTop && !S.eventFinished) {
       const sorted = [...withScores].sort((a, b) => a.toPar - b.toPar);
       let proCount = 0;
       for (const s of sorted) {
         if (!s._amateur) proCount++;
-        if (proCount === poolCutTop) { S.projectedCut = s.toPar; break; }
+        if (proCount === effectiveCutTop) { S.projectedCut = s.toPar; break; }
+      }
+    }
+
+    // ESPN-Override: cutScore aus dem Turnament-Objekt hat Vorrang, falls vorhanden.
+    // Ob actual oder projected: actual sobald ein Spieler 'cut' markiert ist,
+    // sonst projected (live während R1/R2).
+    if (espnCutScore !== null) {
+      const anyoneCut = allScores.some(s => s.status === 'cut' || s.outStatus === 'cut');
+      if (anyoneCut) {
+        S.actualCut = espnCutScore;
+        S.projectedCut = null;
+      } else if (!S.eventFinished) {
+        S.projectedCut = espnCutScore;
       }
     }
 
