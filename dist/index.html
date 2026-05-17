@@ -1716,16 +1716,104 @@ async function showPoolResult(poolId) {
     </tr>`;
   }).join('');
 
-  const payoutRows = (snap.payouts || []).map(p => `
-    <tr>
-      <td style="padding:6px 12px">Platz ${p.rank}</td>
-      <td style="padding:6px 12px;text-align:right;font-weight:600">€${p.amount.toFixed(2)}</td>
-    </tr>`).join('');
+  // Eigenen Namen aus Ranking ableiten — funktioniert auch, wenn der Pool
+  // nicht mehr als activePool geladen ist (Archiv-Aufruf).
+  let myName = null;
+  const meInRanking = (snap.ranking || []).find(r => r.user_id && r.user_id === S.userId);
+  if (meInRanking) myName = meInRanking.name;
+  else {
+    const myMember = (S.poolMembers || []).find(m => m.user_id === S.userId);
+    if (myMember) myName = memberName(myMember);
+  }
+
+  const payoutRows = (snap.payouts || []).map(p => {
+    const isMe = p.name && p.name === myName;
+    return `<tr style="${isMe ? 'background:var(--green-dim);font-weight:600' : ''}">
+      <td style="padding:6px 12px;min-width:48px">${p.rank}.</td>
+      <td style="padding:6px 12px">${esc(p.name || '—')}</td>
+      <td style="padding:6px 12px;text-align:right;font-weight:600">€${(p.amount || 0).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  // ===== Settlement aus Snapshot rekonstruieren =====
+  // entry_fee × ranking → net balance pro Spieler → minimale Transfers.
+  const entryFee = snap.entry_fee || 0;
+  const payoutByName = {};
+  (snap.payouts || []).forEach(p => { if (p.name) payoutByName[p.name] = p.amount || 0; });
+  const balances = (snap.ranking || [])
+    .filter(r => r.name)
+    .map(r => ({ name: r.name, net: Math.round(((payoutByName[r.name] || 0) - entryFee) * 100) / 100 }));
+  const cBal = balances.filter(b => b.net > 0).sort((a, b) => b.net - a.net).map(c => ({ ...c, remaining: c.net }));
+  const dBal = balances.filter(b => b.net < 0).sort((a, b) => a.net - b.net).map(d => ({ ...d, remaining: -d.net }));
+  const transfers = [];
+  let ci = 0, di = 0;
+  while (ci < cBal.length && di < dBal.length) {
+    const amount = Math.min(cBal[ci].remaining, dBal[di].remaining);
+    if (amount > 0.01) {
+      transfers.push({ from: dBal[di].name, to: cBal[ci].name, amount: Math.round(amount * 100) / 100 });
+    }
+    cBal[ci].remaining -= amount;
+    dBal[di].remaining -= amount;
+    if (cBal[ci].remaining < 0.01) ci++;
+    if (dBal[di].remaining < 0.01) di++;
+  }
+
+  const initialsLocal = name => (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+  let myBlock = '';
+  if (myName) {
+    const myNet = (payoutByName[myName] || 0) - entryFee;
+    const myTransfers = transfers.filter(t => t.from === myName || t.to === myName);
+    const netColor = myNet > 0 ? 'var(--green)' : myNet < 0 ? 'var(--red)' : 'var(--text)';
+    myBlock = `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+        <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${esc(myName)}</div>
+        <div style="font-family:var(--font-display);font-size:32px;font-weight:700;color:${netColor};margin:6px 0">${myNet >= 0 ? '+' : ''}€${myNet.toFixed(2)}</div>
+      </div>`;
+    if (myTransfers.length > 0) {
+      myBlock += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px"><div class="transfer-section">
+        <div class="transfer-section-title">${myNet >= 0 ? 'Du bekommst' : 'Du zahlst'}</div>`;
+      myTransfers.forEach(t => {
+        const isPayingTo = t.from === myName;
+        const otherName = isPayingTo ? t.to : t.from;
+        myBlock += `<div class="transfer-card mine">
+          <div class="transfer-avatar ${isPayingTo ? 'debtor' : 'creditor'}">${esc(initialsLocal(isPayingTo ? myName : otherName))}</div>
+          <div class="transfer-from">${isPayingTo ? 'Du' : esc(otherName)}</div>
+          <div class="transfer-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="transfer-to">${isPayingTo ? esc(otherName) : 'Du'}</div>
+          <div class="transfer-avatar ${isPayingTo ? 'creditor' : 'debtor'}">${esc(initialsLocal(isPayingTo ? otherName : myName))}</div>
+          <div class="transfer-amount">€${t.amount.toFixed(2)}</div>
+        </div>`;
+      });
+      myBlock += '</div></div>';
+    }
+  }
+
+  let allTransfersBlock = '';
+  if (transfers.length > 0) {
+    allTransfersBlock = `
+      <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">ZAHLUNGEN</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px"><div class="transfer-section">`;
+    transfers.forEach(t => {
+      const isMine = t.from === myName || t.to === myName;
+      allTransfersBlock += `<div class="transfer-card${isMine ? ' mine' : ''}">
+        <div class="transfer-avatar debtor">${esc(initialsLocal(t.from))}</div>
+        <div class="transfer-from">${esc(t.from)}</div>
+        <div class="transfer-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="transfer-to">${esc(t.to)}</div>
+        <div class="transfer-avatar creditor">${esc(initialsLocal(t.to))}</div>
+        <div class="transfer-amount">€${t.amount.toFixed(2)}</div>
+      </div>`;
+    });
+    allTransfersBlock += '</div></div>';
+  }
 
   const html = `
     <div class="modal-handle"></div>
     <h3 style="font-family:var(--font-display);font-size:22px;color:var(--green);margin-bottom:4px">${esc(snap.name)}</h3>
     <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${new Date(snap.finished_at).toLocaleDateString('de')}</div>
+
+    ${myBlock}
 
     <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">RANGLISTE</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:16px">
@@ -1733,10 +1821,12 @@ async function showPoolResult(poolId) {
     </table>
 
     <div style="font-size:11px;font-weight:600;color:var(--green);letter-spacing:0.5px;margin-bottom:6px">PAYOUTS</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Pot: €${snap.pot.toFixed(2)}</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Pot: €${snap.pot.toFixed(2)} · Entry: €${entryFee.toFixed(2)}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:16px">
       ${payoutRows}
     </table>
+
+    ${allTransfersBlock}
 
     <div class="actions" style="margin-top:20px">
       <button class="btn btn-primary btn-block" onclick="sharePoolResult('${poolId}')">Ergebnis teilen</button>
