@@ -328,6 +328,7 @@ final class PoolService {
         try await client
             .from("tournaments")
             .select()
+            .neq("status", value: "finished")
             .order("start_date", ascending: false)
             .execute()
             .value

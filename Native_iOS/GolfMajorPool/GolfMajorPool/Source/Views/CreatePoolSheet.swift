@@ -213,13 +213,9 @@ struct CreatePoolSheet: View {
         isFetchingTournaments = true
         defer { isFetchingTournaments = false }
 
-        // DB: nur zukünftige / laufende PGA-Turniere
-        let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        // DB: alle nicht abgeschlossenen Turniere
         let dbAll = (try? await PoolService.shared.fetchTournaments()) ?? []
-        let dbFuture = dbAll.filter { t in
-            guard let d = t.startDate else { return true }
-            return d >= today || t.status == "active"
-        }
+        let dbFuture = dbAll.filter { ($0.status ?? "") != "finished" }
         var result = dbFuture.map {
             PickableTournament(id: $0.id.uuidString, name: $0.name,
                                tour: $0.espnLeague == "dpworld" ? "DP World Tour" : "PGA Tour",
