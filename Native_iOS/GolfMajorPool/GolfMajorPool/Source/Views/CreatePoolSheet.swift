@@ -213,45 +213,50 @@ struct CreatePoolSheet: View {
         isFetchingTournaments = true
         defer { isFetchingTournaments = false }
 
-        // DB: alle nicht abgeschlossenen Turniere
-        let dbAll = (try? await PoolService.shared.fetchTournaments()) ?? []
-        let dbFuture = dbAll.filter { ($0.status ?? "") != "finished" }
-        var result = dbFuture.map {
-            PickableTournament(id: $0.id.uuidString, name: $0.name,
-                               tour: $0.espnLeague == "dpworld" ? "DP World Tour" : "PGA Tour",
-                               espnLeague: $0.espnLeagueOrDefault,
-                               par: $0.parOrDefault,
-                               espnEventId: $0.espnEventId, dbTournament: $0)
-        }
+        // Nächste 2 Wochen von ESPN, beide Tours parallel
+        async let pgaTask   = fetchEspnEvents(league: "pga",     tourLabel: "PGA Tour")
+        async let dpTask    = fetchEspnEvents(league: "dpworld",  tourLabel: "DP World Tour")
 
-        // ESPN: aktuelles/nächstes DP World Tour Event
-        if let dpEvent = await fetchDpWorldTourEvent() {
-            // Nicht doppelt zeigen falls schon in DB
-            let alreadyInDB = result.contains { $0.espnEventId == dpEvent.espnEventId }
-            if !alreadyInDB { result.append(dpEvent) }
+        let (pgaEvents, dpEvents) = await (pgaTask, dpTask)
+
+        // Deduplizieren nach ESPN-ID
+        var seen = Set<String>()
+        var result: [PickableTournament] = []
+        for e in pgaEvents + dpEvents {
+            guard seen.insert(e.id).inserted else { continue }
+            result.append(e)
         }
 
         pickable = result
-        if selected == nil {
-            selected = result.first
-        }
+        if selected == nil { selected = result.first }
     }
 
-    private func fetchDpWorldTourEvent() async -> PickableTournament? {
-        guard let url = URL(string: "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=dpworld") else { return nil }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let events = json["events"] as? [[String: Any]],
-              let event = events.first,
-              let name = event["name"] as? String,
-              let eid = event["id"] as? String else { return nil }
+    /// Holt kommende Events der nächsten ~14 Tage von ESPN.
+    private func fetchEspnEvents(league: String, tourLabel: String) async -> [PickableTournament] {
+        let cal = Calendar.current
+        let now = Date()
+        let in14 = cal.date(byAdding: .day, value: 14, to: now) ?? now
 
-        let comp = (event["competitions"] as? [[String: Any]])?.first
-        let venue = ((comp?["venue"] as? [String: Any])?["fullName"] as? String) ?? ""
-        let displayName = venue.isEmpty ? name : "\(name) · \(venue)"
-        return PickableTournament(id: "dpworld-\(eid)", name: displayName,
-                                   tour: "DP World Tour", espnLeague: "dpworld",
-                                   par: 72, espnEventId: eid, dbTournament: nil)
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyyMMdd"
+        let dateRange = "\(fmt.string(from: now))-\(fmt.string(from: in14))"
+
+        let urlStr = "https://site.web.api.espn.com/apis/site/v2/sports/golf/scoreboard?league=\(league)&dates=\(dateRange)"
+        guard let url = URL(string: urlStr),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let events = json["events"] as? [[String: Any]] else { return [] }
+
+        return events.compactMap { ev -> PickableTournament? in
+            guard let eid  = ev["id"]   as? String,
+                  let name = ev["name"] as? String else { return nil }
+            let comp  = (ev["competitions"] as? [[String: Any]])?.first
+            let venue = ((comp?["venue"] as? [String: Any])?["fullName"] as? String) ?? ""
+            let display = venue.isEmpty ? name : "\(name) · \(venue)"
+            return PickableTournament(id: "\(league)-\(eid)", name: display,
+                                     tour: tourLabel, espnLeague: league,
+                                     par: 72, espnEventId: eid, dbTournament: nil)
+        }
     }
 
     private func createPool() async {
