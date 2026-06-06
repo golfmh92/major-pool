@@ -381,7 +381,8 @@ final class PoolService {
         var resolvedTournamentId: String? = pickable?.dbTournament?.id.uuidString
         if let p = pickable, p.dbTournament == nil, let espnId = p.espnEventId {
             struct InsertTournament: Encodable {
-                let name: String; let espn_event_id: String; let par: Int; let status: String
+                let name: String; let espn_event_id: String
+                let par: Int; let status: String; let espn_league: String
             }
             // Check ob schon in DB (race condition)
             let existing: [Tournament] = (try? await client
@@ -393,7 +394,8 @@ final class PoolService {
                 let inserted: [Tournament] = try await client
                     .from("tournaments")
                     .insert(InsertTournament(name: p.name, espn_event_id: espnId,
-                                             par: p.par, status: "pre"))
+                                             par: p.par, status: "pre",
+                                             espn_league: p.espnLeague))
                     .select().execute().value
                 resolvedTournamentId = inserted.first?.id.uuidString
             }

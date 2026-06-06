@@ -30,7 +30,8 @@ final class PoolDetailViewModel {
         }
         await realtime.start()
         if let espnId = bundle?.tournament?.espnEventId, !espnId.isEmpty {
-            live.start(eventID: espnId)
+            let league = bundle?.tournament?.espnLeagueOrDefault ?? "pga"
+            live.start(eventID: espnId, league: league)
         }
     }
 

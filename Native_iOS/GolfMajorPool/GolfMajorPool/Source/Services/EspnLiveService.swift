@@ -13,11 +13,11 @@ final class EspnLiveService {
 
     private var pollTask: Task<Void, Never>?
 
-    func start(eventID: String?) {
+    func start(eventID: String?, league: String = "pga") {
         stop()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh(eventID: eventID)
+                await self?.refresh(eventID: eventID, league: league)
                 try? await Task.sleep(nanoseconds: 30 * 1_000_000_000) // 30s
             }
         }
@@ -28,11 +28,11 @@ final class EspnLiveService {
         pollTask = nil
     }
 
-    func refresh(eventID: String?) async {
+    func refresh(eventID: String?, league: String = "pga") async {
         isLoading = true
         defer { isLoading = false }
 
-        let lbBase = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga"
+        let lbBase = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=\(league)"
         let url: URL? = {
             if let id = eventID, !id.isEmpty {
                 return URL(string: "\(lbBase)&event=\(id)")

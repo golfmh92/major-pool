@@ -4,6 +4,7 @@ struct Tournament: Codable, Identifiable, Hashable {
     let id: UUID
     let name: String
     let espnEventId: String?
+    let espnLeague: String?
     let par: Int?
     let cutAfterRound: Int?
     let cutTop: Int?
@@ -18,6 +19,7 @@ struct Tournament: Codable, Identifiable, Hashable {
         case id
         case name
         case espnEventId   = "espn_event_id"
+        case espnLeague    = "espn_league"
         case par
         case cutAfterRound = "cut_after_round"
         case cutTop        = "cut_top"
@@ -28,6 +30,7 @@ struct Tournament: Codable, Identifiable, Hashable {
     }
 
     var parOrDefault: Int { par ?? 72 }
+    var espnLeagueOrDefault: String { espnLeague ?? "pga" }
 }
 
 struct TournamentGolfer: Codable, Identifiable, Hashable {

@@ -5,7 +5,8 @@ import Foundation
 struct PickableTournament: Identifiable, Hashable {
     let id: String
     let name: String
-    let tour: String
+    let tour: String          // Display-Label: "PGA Tour" / "DP World Tour"
+    let espnLeague: String    // ESPN API: "pga" / "dpworld"
     let par: Int
     let espnEventId: String?
     let dbTournament: Tournament?

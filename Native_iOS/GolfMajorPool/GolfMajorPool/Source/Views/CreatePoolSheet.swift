@@ -222,7 +222,9 @@ struct CreatePoolSheet: View {
         }
         var result = dbFuture.map {
             PickableTournament(id: $0.id.uuidString, name: $0.name,
-                               tour: "PGA Tour", par: $0.parOrDefault,
+                               tour: $0.espnLeague == "dpworld" ? "DP World Tour" : "PGA Tour",
+                               espnLeague: $0.espnLeagueOrDefault,
+                               par: $0.parOrDefault,
                                espnEventId: $0.espnEventId, dbTournament: $0)
         }
 
@@ -252,8 +254,8 @@ struct CreatePoolSheet: View {
         let venue = ((comp?["venue"] as? [String: Any])?["fullName"] as? String) ?? ""
         let displayName = venue.isEmpty ? name : "\(name) · \(venue)"
         return PickableTournament(id: "dpworld-\(eid)", name: displayName,
-                                   tour: "DP World Tour", par: 72,
-                                   espnEventId: eid, dbTournament: nil)
+                                   tour: "DP World Tour", espnLeague: "dpworld",
+                                   par: 72, espnEventId: eid, dbTournament: nil)
     }
 
     private func createPool() async {

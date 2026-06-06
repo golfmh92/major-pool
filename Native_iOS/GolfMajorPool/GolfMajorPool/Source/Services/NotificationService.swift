@@ -1,5 +1,7 @@
 import Foundation
+import UIKit
 import UserNotifications
+import Supabase
 
 /// APNs-Registrierung und Device-Token-Persistierung in Supabase.
 /// Wird einmalig nach Login aufgerufen.
@@ -36,12 +38,10 @@ final class NotificationService {
         let iso = ISO8601DateFormatter().string(from: Date())
         _ = try? await SB.client
             .from("device_tokens")
-            .upsert(Upsert(
-                user_id: uid.uuidString,
-                token: token,
-                platform: "ios",
-                updated_at: iso
-            ), onConflict: "token")
+            .upsert(
+                Upsert(user_id: uid.uuidString, token: token, platform: "ios", updated_at: iso),
+                onConflict: "token"
+            )
             .execute()
     }
 }
