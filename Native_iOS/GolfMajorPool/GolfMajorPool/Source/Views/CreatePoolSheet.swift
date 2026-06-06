@@ -1,12 +1,13 @@
 import SwiftUI
 
+
 struct CreatePoolSheet: View {
     @Environment(\.dismiss) var dismiss
     let onCreated: (UUID) async -> Void
 
     @State private var poolName = ""
-    @State private var tournaments: [Tournament] = []
-    @State private var selectedTournament: Tournament?
+    @State private var pickable: [PickableTournament] = []
+    @State private var selected: PickableTournament?
     @State private var entryFee: Double = 20
     @State private var picksPerMember: Int = 5
     @State private var isLoading = false
@@ -73,22 +74,21 @@ struct CreatePoolSheet: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        tournamentChip(nil, title: "Kein Turnier")
-                        ForEach(tournaments) { t in
-                            tournamentChip(t, title: t.name)
+                        noneChip
+                        ForEach(pickable) { t in
+                            chip(t)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
         }
     }
 
-    private func tournamentChip(_ t: Tournament?, title: String) -> some View {
-        let isSelected = selectedTournament?.id == t?.id && (t == nil) == (selectedTournament == nil)
-        return Button {
-            selectedTournament = t
-        } label: {
-            Text(title)
+    private var noneChip: some View {
+        let isSelected = selected == nil
+        return Button { selected = nil } label: {
+            Text("Kein Turnier")
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -96,6 +96,26 @@ struct CreatePoolSheet: View {
                 .foregroundStyle(isSelected ? .white : Theme.text)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chip(_ t: PickableTournament) -> some View {
+        let isSelected = selected?.id == t.id
+        return Button { selected = t } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t.name)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                Text(t.tour)
+                    .font(.system(size: 10))
+                    .opacity(0.75)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Theme.accent : Theme.bg2)
+            .foregroundStyle(isSelected ? .white : Theme.text)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -192,11 +212,48 @@ struct CreatePoolSheet: View {
     private func loadTournaments() async {
         isFetchingTournaments = true
         defer { isFetchingTournaments = false }
-        tournaments = (try? await PoolService.shared.fetchTournaments()) ?? []
-        // Auto-select first non-finished tournament
-        if selectedTournament == nil {
-            selectedTournament = tournaments.first { ($0.status ?? "") != "finished" }
+
+        // DB: nur zukünftige / laufende PGA-Turniere
+        let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        let dbAll = (try? await PoolService.shared.fetchTournaments()) ?? []
+        let dbFuture = dbAll.filter { t in
+            guard let d = t.startDate else { return true }
+            return d >= today || t.status == "active"
         }
+        var result = dbFuture.map {
+            PickableTournament(id: $0.id.uuidString, name: $0.name,
+                               tour: "PGA Tour", par: $0.parOrDefault,
+                               espnEventId: $0.espnEventId, dbTournament: $0)
+        }
+
+        // ESPN: aktuelles/nächstes DP World Tour Event
+        if let dpEvent = await fetchDpWorldTourEvent() {
+            // Nicht doppelt zeigen falls schon in DB
+            let alreadyInDB = result.contains { $0.espnEventId == dpEvent.espnEventId }
+            if !alreadyInDB { result.append(dpEvent) }
+        }
+
+        pickable = result
+        if selected == nil {
+            selected = result.first
+        }
+    }
+
+    private func fetchDpWorldTourEvent() async -> PickableTournament? {
+        guard let url = URL(string: "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=dpworld") else { return nil }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let events = json["events"] as? [[String: Any]],
+              let event = events.first,
+              let name = event["name"] as? String,
+              let eid = event["id"] as? String else { return nil }
+
+        let comp = (event["competitions"] as? [[String: Any]])?.first
+        let venue = ((comp?["venue"] as? [String: Any])?["fullName"] as? String) ?? ""
+        let displayName = venue.isEmpty ? name : "\(name) · \(venue)"
+        return PickableTournament(id: "dpworld-\(eid)", name: displayName,
+                                   tour: "DP World Tour", par: 72,
+                                   espnEventId: eid, dbTournament: nil)
     }
 
     private func createPool() async {
@@ -208,7 +265,7 @@ struct CreatePoolSheet: View {
         do {
             let pool = try await PoolService.shared.createPool(
                 name: name,
-                tournament: selectedTournament,
+                pickable: selected,
                 entryFee: entryFee,
                 picksPerMember: picksPerMember
             )

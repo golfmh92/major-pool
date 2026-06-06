@@ -350,7 +350,7 @@ final class PoolService {
 
     func createPool(
         name: String,
-        tournament: Tournament?,
+        pickable: PickableTournament?,
         entryFee: Double,
         picksPerMember: Int
     ) async throws -> Pool {
@@ -361,11 +361,7 @@ final class PoolService {
 
         // Ensure user profile exists
         let existing: [PoolUser] = try await client
-            .from("users")
-            .select()
-            .eq("id", value: uid.uuidString)
-            .execute()
-            .value
+            .from("users").select().eq("id", value: uid.uuidString).execute().value
         if existing.isEmpty {
             struct InsertUser: Encodable {
                 let id: String; let name: String; let email: String?; let avatar_initials: String
@@ -381,24 +377,43 @@ final class PoolService {
                 .execute()
         }
 
+        // Falls DP World Tour Event (nicht in DB): erst in tournaments einfügen
+        var resolvedTournamentId: String? = pickable?.dbTournament?.id.uuidString
+        if let p = pickable, p.dbTournament == nil, let espnId = p.espnEventId {
+            struct InsertTournament: Encodable {
+                let name: String; let espn_event_id: String; let par: Int; let status: String
+            }
+            // Check ob schon in DB (race condition)
+            let existing: [Tournament] = (try? await client
+                .from("tournaments").select()
+                .eq("espn_event_id", value: espnId).execute().value) ?? []
+            if let found = existing.first {
+                resolvedTournamentId = found.id.uuidString
+            } else {
+                let inserted: [Tournament] = try await client
+                    .from("tournaments")
+                    .insert(InsertTournament(name: p.name, espn_event_id: espnId,
+                                             par: p.par, status: "pre"))
+                    .select().execute().value
+                resolvedTournamentId = inserted.first?.id.uuidString
+            }
+        }
+
         let pool: Pool = try await client
             .from("pools")
             .insert(CreatePoolPayload(
                 name: name,
-                tournament_id: tournament?.id.uuidString,
-                tournament_name: tournament?.name,
-                par: tournament?.parOrDefault ?? 72,
-                cut_top: tournament?.cutTop ?? 50,
+                tournament_id: resolvedTournamentId,
+                tournament_name: pickable?.name,
+                par: pickable?.par ?? 72,
+                cut_top: pickable?.dbTournament?.cutTop ?? 50,
                 entry_fee: entryFee,
                 picks_per_member: picksPerMember,
-                pick_seconds: 10800, // 3h in seconds (unused in async draft, kept for schema compat)
+                pick_seconds: 10800,
                 status: "lobby",
                 created_by: uid.uuidString
             ))
-            .select()
-            .single()
-            .execute()
-            .value
+            .select().single().execute().value
 
         struct InsertMember: Encodable {
             let pool_id: String; let user_id: String
