@@ -38,7 +38,11 @@ final class AuthService {
 
     private func observeAuthChanges() async {
         for await change in SB.client.auth.authStateChanges {
+            let wasAuthenticated = self.isAuthenticated
             self.session = change.session
+            if !wasAuthenticated && self.isAuthenticated {
+                NotificationCenter.default.post(name: .userDidLogin, object: nil)
+            }
         }
     }
 

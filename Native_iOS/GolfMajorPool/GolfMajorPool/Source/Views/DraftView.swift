@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Live-Draft-Ansicht — Order-Liste mit On-the-Clock, Countdown, alle bisherigen Picks
-/// und ein Pick-Modal, sobald der eingeloggte User dran ist.
+/// Async-Draft-Ansicht — jeder Spieler hat 3 Stunden Zeit nach Push-Notification.
+/// Kein Live-Countdown in Sekunden, sondern Restzeit in Stunden:Minuten.
 struct DraftView: View {
     @Bindable var vm: PoolDetailViewModel
     @Environment(AuthService.self) private var auth
@@ -14,11 +14,8 @@ struct DraftView: View {
         vm.memberOnTheClock(pickNumber: vm.nextPickNumber)
     }
     private var iAmOnTheClock: Bool {
-        currentMember?.userId != nil && currentMember?.userId == auth.userID
-    }
-    private var deadlineSeconds: Int? {
-        guard let dl = vm.bundle?.pool.currentPickDeadline else { return nil }
-        return Int(dl.timeIntervalSince(now).rounded())
+        guard let m = currentMember else { return false }
+        return m.userId != nil && m.userId == auth.userID
     }
     private var draftDone: Bool {
         vm.nextPickNumber > vm.totalPicksNeeded
@@ -44,7 +41,7 @@ struct DraftView: View {
             tickerTask = Task {
                 while !Task.isCancelled {
                     self.now = .now
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: 30_000_000_000) // 30s refrisch reicht
                 }
             }
         }
@@ -69,7 +66,7 @@ struct DraftView: View {
                     .font(.custom(Theme.displayFont, size: 28))
                     .foregroundStyle(.white)
             } else if let m = currentMember {
-                Text(iAmOnTheClock ? "DU BIST DRAN" : "ON THE CLOCK")
+                Text(iAmOnTheClock ? "DU BIST DRAN" : "WARTET AUF")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(2)
                     .foregroundStyle(iAmOnTheClock ? Color(hex: 0xFFE680) : .white.opacity(0.8))
@@ -78,11 +75,8 @@ struct DraftView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                if let sec = deadlineSeconds {
-                    Text(Fmt.secondsToClock(max(0, sec)))
-                        .font(.custom(Theme.displayFont, size: 28))
-                        .foregroundStyle(sec <= 10 ? Theme.redLight : .white.opacity(0.9))
-                        .padding(.top, 2)
+                if let deadline = vm.bundle?.pool.currentPickDeadline {
+                    deadlineLabel(deadline)
                 }
             }
 
@@ -111,6 +105,25 @@ struct DraftView: View {
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: Theme.accent.opacity(0.25), radius: 8, x: 0, y: 4)
+    }
+
+    @ViewBuilder
+    private func deadlineLabel(_ deadline: Date) -> some View {
+        let remaining = deadline.timeIntervalSince(now)
+        if remaining <= 0 {
+            Text("Zeit abgelaufen")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.redLight)
+                .padding(.top, 2)
+        } else {
+            let h = Int(remaining) / 3600
+            let m = (Int(remaining) % 3600) / 60
+            let label = h > 0 ? "noch \(h)h \(m)min" : "noch \(m)min"
+            Text(label)
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundStyle(remaining < 3600 ? Theme.redLight : .white.opacity(0.9))
+                .padding(.top, 2)
+        }
     }
 
     private var orderStrip: some View {
@@ -183,7 +196,7 @@ struct DraftView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    // MARK: - All Picks
+    // MARK: - Picks List
 
     private var allPicksList: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -239,11 +252,12 @@ struct DraftView: View {
             await vm.reload()
             pickSheetMember = nil
         } catch {
-            // Realtime hat noch nicht refreshed → User sieht Modal noch. Schließen.
             pickSheetMember = nil
         }
     }
 }
+
+// MARK: - Pick Card
 
 private struct DraftPickCard: View {
     let pick: PoolPick

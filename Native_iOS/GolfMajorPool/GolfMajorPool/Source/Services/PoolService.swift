@@ -249,6 +249,8 @@ final class PoolService {
                                draft_round: round,
                                draft_pick: pickIndex))
             .execute()
+        // Advance async draft: notify next picker
+        await advanceDraft(poolID: poolID)
     }
 
     func deletePick(id: UUID) async throws {
@@ -318,6 +320,107 @@ final class PoolService {
         for (i, m) in shuffled.enumerated() {
             try await updateDraftPosition(memberID: m.id, position: i + 1)
         }
+    }
+
+    // MARK: - Tournaments (for Create Pool)
+
+    func fetchTournaments() async throws -> [Tournament] {
+        try await client
+            .from("tournaments")
+            .select()
+            .order("start_date", ascending: false)
+            .execute()
+            .value
+    }
+
+    // MARK: - Create Pool
+
+    struct CreatePoolPayload: Encodable {
+        let name: String
+        let tournament_id: String?
+        let tournament_name: String?
+        let par: Int
+        let cut_top: Int
+        let entry_fee: Double
+        let picks_per_member: Int
+        let pick_seconds: Int
+        let status: String
+        let created_by: String
+    }
+
+    func createPool(
+        name: String,
+        tournament: Tournament?,
+        entryFee: Double,
+        picksPerMember: Int
+    ) async throws -> Pool {
+        guard let uid = AuthService.shared.userID else {
+            throw NSError(domain: "MajorPool", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "Nicht eingeloggt"])
+        }
+
+        // Ensure user profile exists
+        let existing: [PoolUser] = try await client
+            .from("users")
+            .select()
+            .eq("id", value: uid.uuidString)
+            .execute()
+            .value
+        if existing.isEmpty {
+            struct InsertUser: Encodable {
+                let id: String; let name: String; let email: String?; let avatar_initials: String
+            }
+            let email = AuthService.shared.userEmail ?? ""
+            let fallback = email.components(separatedBy: "@").first ?? "User"
+            let initials = fallback.split(separator: " ").prefix(2)
+                .compactMap { $0.first }.map { String($0) }.joined().uppercased()
+            _ = try await client.from("users")
+                .insert(InsertUser(id: uid.uuidString, name: fallback,
+                                   email: email.isEmpty ? nil : email,
+                                   avatar_initials: initials.isEmpty ? "U" : initials))
+                .execute()
+        }
+
+        let pool: Pool = try await client
+            .from("pools")
+            .insert(CreatePoolPayload(
+                name: name,
+                tournament_id: tournament?.id.uuidString,
+                tournament_name: tournament?.name,
+                par: tournament?.parOrDefault ?? 72,
+                cut_top: tournament?.cutTop ?? 50,
+                entry_fee: entryFee,
+                picks_per_member: picksPerMember,
+                pick_seconds: 10800, // 3h in seconds (unused in async draft, kept for schema compat)
+                status: "lobby",
+                created_by: uid.uuidString
+            ))
+            .select()
+            .single()
+            .execute()
+            .value
+
+        struct InsertMember: Encodable {
+            let pool_id: String; let user_id: String
+            let is_admin: Bool; let draft_position: Int
+        }
+        _ = try await client
+            .from("pool_members")
+            .insert(InsertMember(pool_id: pool.id.uuidString,
+                                 user_id: uid.uuidString,
+                                 is_admin: true, draft_position: 1))
+            .execute()
+
+        return pool
+    }
+
+    // MARK: - Async Draft: advance pick pointer + notify
+
+    func advanceDraft(poolID: UUID) async {
+        _ = try? await SB.client.functions.invoke(
+            "advance-draft",
+            options: .init(body: ["pool_id": poolID.uuidString])
+        )
     }
 
     // MARK: - User Profile

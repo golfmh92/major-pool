@@ -10,6 +10,7 @@ struct PoolListView: View {
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var showJoinSheet = false
+    @State private var showCreateSheet = false
     @State private var showAccountSheet = false
     @State private var autoOpenPoolID: UUID?
 
@@ -76,6 +77,12 @@ struct PoolListView: View {
             .sheet(isPresented: $showJoinSheet) {
                 JoinPoolSheet { await load(autoOpen: true) }
             }
+            .sheet(isPresented: $showCreateSheet) {
+                CreatePoolSheet { newPoolID in
+                    await load(autoOpen: false)
+                    autoOpenPoolID = newPoolID
+                }
+            }
             .sheet(isPresented: $showAccountSheet) {
                 AccountSheet()
             }
@@ -89,22 +96,37 @@ struct PoolListView: View {
                 .tracking(2)
                 .foregroundStyle(Theme.text3)
             Spacer()
-            Button {
-                showJoinSheet = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Beitreten")
-                        .font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 8) {
+                Button { showCreateSheet = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Erstellen")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Theme.bg2)
+                    .foregroundStyle(Theme.accent)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Theme.accent.opacity(0.4), lineWidth: 1))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Theme.accent)
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
+                .buttonStyle(.plain)
+                Button { showJoinSheet = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Beitreten")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Theme.accent)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.top, 18)
         .padding(.bottom, 4)
@@ -304,7 +326,7 @@ private struct JoinPoolSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
-                    Text("Den Code bekommst du vom Freund, der den Pool angelegt hat. Pool-Erstellen läuft aktuell über die Web-App.")
+                    Text("Den Code bekommst du vom Freund, der den Pool angelegt hat. Oder erstelle oben selbst einen neuen Pool.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.text3)
                         .padding(.top, 4)

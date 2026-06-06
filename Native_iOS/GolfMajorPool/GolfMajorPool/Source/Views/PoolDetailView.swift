@@ -17,12 +17,13 @@ struct PoolDetailView: View {
     }
 
     enum PoolTab: Hashable {
-        case ranking, leaderboard, draft, picks, payouts, members, rules, admin
+        case ranking, leaderboard, stats, draft, picks, payouts, members, rules, admin
 
         var label: String {
             switch self {
             case .ranking:     return "Rangliste"
             case .leaderboard: return "Leaderboard"
+            case .stats:       return "Stats"
             case .draft:       return "Draft"
             case .picks:       return "Meine Picks"
             case .payouts:     return "Payouts"
@@ -42,7 +43,7 @@ struct PoolDetailView: View {
             tabs = [.draft, .members, .rules]
         } else {
             // active / finished
-            tabs = [.ranking, .leaderboard, .picks, .payouts, .members, .rules]
+            tabs = [.ranking, .leaderboard, .stats, .picks, .payouts, .members, .rules]
         }
         if vm.iAmAdmin { tabs.append(.admin) }
         return tabs
@@ -198,6 +199,7 @@ struct PoolDetailView: View {
                 switch selectedTab {
                 case .ranking:     RankingView(vm: vm)
                 case .leaderboard: LeaderboardView(vm: vm)
+                case .stats:       StatsView(vm: vm)
                 case .draft:       DraftView(vm: vm)
                 case .picks:       PicksView(vm: vm)
                 case .payouts:     PayoutsView(vm: vm)

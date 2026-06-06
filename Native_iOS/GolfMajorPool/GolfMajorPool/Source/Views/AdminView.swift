@@ -335,6 +335,10 @@ struct AdminView: View {
         guard let pool = vm.bundle?.pool else { return }
         do {
             try await PoolService.shared.updatePoolStatus(poolID: pool.id, status: status)
+            // Async draft: nach Draft-Start erste Push-Notification auslösen
+            if status == "draft" || status == "drafting" {
+                await PoolService.shared.advanceDraft(poolID: pool.id)
+            }
             await vm.reload()
         } catch { actionError = error.localizedDescription }
     }

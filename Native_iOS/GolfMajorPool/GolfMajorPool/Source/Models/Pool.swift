@@ -13,24 +13,26 @@ struct Pool: Codable, Identifiable, Hashable {
     let createdBy: UUID?
     let createdAt: Date?
     let currentPickDeadline: Date?
+    let currentPickMemberId: UUID?
     let pickSeconds: Int?
     let picksPerMember: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
-        case tournamentName       = "tournament_name"
-        case tournamentId         = "tournament_id"
+        case tournamentName         = "tournament_name"
+        case tournamentId           = "tournament_id"
         case par
-        case cutTop               = "cut_top"
-        case entryFee             = "entry_fee"
+        case cutTop                 = "cut_top"
+        case entryFee               = "entry_fee"
         case status
-        case inviteCode           = "invite_code"
-        case createdBy            = "created_by"
-        case createdAt            = "created_at"
-        case currentPickDeadline  = "current_pick_deadline"
-        case pickSeconds          = "pick_seconds"
-        case picksPerMember       = "picks_per_member"
+        case inviteCode             = "invite_code"
+        case createdBy              = "created_by"
+        case createdAt              = "created_at"
+        case currentPickDeadline    = "current_pick_deadline"
+        case currentPickMemberId    = "current_pick_member_id"
+        case pickSeconds            = "pick_seconds"
+        case picksPerMember         = "picks_per_member"
     }
 
     var isLobby:    Bool { status == "lobby" }
