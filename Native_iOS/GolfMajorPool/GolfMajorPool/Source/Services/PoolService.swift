@@ -395,7 +395,7 @@ final class PoolService {
                 let inserted: [Tournament] = try await client
                     .from("tournaments")
                     .insert(InsertTournament(name: p.name, espn_event_id: espnId,
-                                             par: p.par, status: "pre",
+                                             par: p.par, status: "upcoming",
                                              espn_league: p.espnLeague))
                     .select().execute().value
                 resolvedTournamentId = inserted.first?.id.uuidString

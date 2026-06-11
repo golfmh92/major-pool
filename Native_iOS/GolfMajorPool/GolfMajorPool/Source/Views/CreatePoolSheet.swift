@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 
 struct CreatePoolSheet: View {
@@ -213,16 +214,26 @@ struct CreatePoolSheet: View {
         isFetchingTournaments = true
         defer { isFetchingTournaments = false }
 
-        // Nächste 2 Wochen von ESPN, beide Tours parallel
-        async let pgaTask   = fetchEspnEvents(league: "pga",     tourLabel: "PGA Tour")
-        async let dpTask    = fetchEspnEvents(league: "dpworld",  tourLabel: "DP World Tour")
+        // DB (PGA + evtl. DP World): nicht abgeschlossene Events ab 7 Tage zurück, nächste 5
+        // ESPN DP World Tour Leaderboard: aktuelles/nächstes Event (nicht in DB)
+        async let dbTask  = fetchDbTournaments()
+        async let dpTask  = fetchEspnLeaderboardEvent(league: "eur", tourLabel: "European Tour")
+        async let pgaTask = fetchEspnLeaderboardEvent(league: "pga",     tourLabel: "PGA Tour")
 
-        let (pgaEvents, dpEvents) = await (pgaTask, dpTask)
+        let (dbEvents, dpEvents, pgaLiveEvents) = await (dbTask, dpTask, pgaTask)
 
-        // Deduplizieren nach ESPN-ID
+        // DB-Events kommen zuerst, ESPN füllt auf was nicht in der DB ist
         var seen = Set<String>()
         var result: [PickableTournament] = []
-        for e in pgaEvents + dpEvents {
+
+        // DB-Events nach ID merken (espnEventId als Dedup-Key)
+        for e in dbEvents {
+            seen.insert(e.id)
+            if let eid = e.espnEventId { seen.insert("pga-\(eid)"); seen.insert("dpworld-\(eid)") }
+            result.append(e)
+        }
+        // ESPN-Events nur hinzufügen wenn ESPN-ID noch nicht aus DB bekannt
+        for e in pgaLiveEvents + dpEvents {
             guard seen.insert(e.id).inserted else { continue }
             result.append(e)
         }
@@ -231,17 +242,35 @@ struct CreatePoolSheet: View {
         if selected == nil { selected = result.first }
     }
 
-    /// Holt kommende Events der nächsten ~14 Tage von ESPN.
-    private func fetchEspnEvents(league: String, tourLabel: String) async -> [PickableTournament] {
-        let cal = Calendar.current
-        let now = Date()
-        let in14 = cal.date(byAdding: .day, value: 14, to: now) ?? now
+    /// DB: Events, die noch nicht abgeschlossen sind und nicht vor >7 Tagen starteten.
+    /// Gibt nächste 5 zurück (auch weit in der Zukunft liegend).
+    private func fetchDbTournaments() async -> [PickableTournament] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
 
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyyMMdd"
-        let dateRange = "\(fmt.string(from: now))-\(fmt.string(from: in14))"
+        guard let tournaments = try? await SB.client
+            .from("tournaments")
+            .select()
+            .neq("status", value: "finished")
+            .gte("start_date", value: fmt.string(from: cutoff))
+            .order("start_date", ascending: true)
+            .limit(5)
+            .execute()
+            .value as [Tournament]
+        else { return [] }
 
-        let urlStr = "https://site.web.api.espn.com/apis/site/v2/sports/golf/scoreboard?league=\(league)&dates=\(dateRange)"
+        return tournaments.map { t in
+            PickableTournament(id: "db-\(t.id.uuidString)", name: t.name,
+                               tour: t.espnLeague == "eur" ? "European Tour" : "PGA Tour",
+                               espnLeague: t.espnLeagueOrDefault,
+                               par: t.parOrDefault, espnEventId: t.espnEventId,
+                               dbTournament: t)
+        }
+    }
+
+    /// ESPN-Leaderboard: gibt das aktuelle/nächste Event der jeweiligen Tour zurück.
+    private func fetchEspnLeaderboardEvent(league: String, tourLabel: String) async -> [PickableTournament] {
+        let urlStr = "https://site.web.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=\(league)"
         guard let url = URL(string: urlStr),
               let (data, _) = try? await URLSession.shared.data(from: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -250,6 +279,10 @@ struct CreatePoolSheet: View {
         return events.compactMap { ev -> PickableTournament? in
             guard let eid  = ev["id"]   as? String,
                   let name = ev["name"] as? String else { return nil }
+            // Abgeschlossene Events überspringen
+            let status = (ev["status"] as? [String: Any])?["type"] as? [String: Any]
+            let statusName = (status?["name"] as? String)?.lowercased() ?? ""
+            if statusName.contains("post") || statusName.contains("final") { return nil }
             let comp  = (ev["competitions"] as? [[String: Any]])?.first
             let venue = ((comp?["venue"] as? [String: Any])?["fullName"] as? String) ?? ""
             let display = venue.isEmpty ? name : "\(name) · \(venue)"
