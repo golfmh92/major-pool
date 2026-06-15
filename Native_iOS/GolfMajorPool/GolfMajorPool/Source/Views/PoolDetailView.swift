@@ -1,15 +1,10 @@
 import SwiftUI
 
-/// Custom Tab-Bar wie in der PWA — horizontal scrollender Underline-Tab-Strip,
-/// nicht die System-`TabView`. Reihenfolge & Tabs spiegeln PWA-Tabs:
-/// `lobby` → Mitspieler · Regeln · Admin
-/// `drafting` → Draft · Mitspieler · Regeln · Admin
-/// `active`/`finished` → Rangliste · Leaderboard · Meine Picks · Payouts · Mitspieler · Regeln · Admin
 struct PoolDetailView: View {
     let poolID: UUID
 
     @State private var vm: PoolDetailViewModel
-    @State private var selectedTab: PoolTab = .ranking
+    @State private var selectedTab: PoolTab = .leaderboard
 
     init(poolID: UUID) {
         self.poolID = poolID
@@ -18,217 +13,163 @@ struct PoolDetailView: View {
 
     enum PoolTab: Hashable {
         case ranking, leaderboard, stats, draft, picks, payouts, members, rules, admin
-
-        var label: String {
-            switch self {
-            case .ranking:     return "Rangliste"
-            case .leaderboard: return "Leaderboard"
-            case .stats:       return "Stats"
-            case .draft:       return "Draft"
-            case .picks:       return "Meine Picks"
-            case .payouts:     return "Payouts"
-            case .members:     return "Mitspieler"
-            case .rules:       return "Regeln"
-            case .admin:       return "Admin"
-            }
-        }
-    }
-
-    private var visibleTabs: [PoolTab] {
-        guard let pool = vm.bundle?.pool else { return [.members] }
-        var tabs: [PoolTab] = []
-        if pool.isLobby {
-            tabs = [.members, .rules]
-        } else if pool.isDrafting {
-            tabs = [.draft, .members, .rules]
-        } else {
-            // active / finished
-            tabs = [.ranking, .leaderboard, .stats, .picks, .payouts, .members, .rules]
-        }
-        if vm.iAmAdmin { tabs.append(.admin) }
-        return tabs
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Theme.bg.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                MajorPoolHeader(
-                    subtitle: (vm.bundle?.pool.tournamentName ?? "TURNIER").uppercased(),
-                    liveLabel: liveLabel
-                )
-                .overlay(alignment: .topLeading) {
-                    NavigationBackButton()
-                        .padding(.leading, 6)
-                        .padding(.top, 18)
-                }
-
-                if let b = vm.bundle {
-                    poolMeta(b)
-                    tabStrip
-                    tabContent(b)
-                } else if vm.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let err = vm.error {
-                    VStack(spacing: 10) {
-                        Text("Fehler beim Laden")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                        Text(err)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.text2)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                        Button("Erneut versuchen") {
-                            Task { await vm.reload() }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.accent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-        }
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .task { await vm.start() }
-        .onDisappear { Task { await vm.stop() } }
-        .onChange(of: visibleTabs) { _, new in
-            if !new.contains(selectedTab), let first = new.first {
-                selectedTab = first
-            }
-        }
+        content
+            .task { await vm.start() }
+            .onDisappear { Task { await vm.stop() } }
     }
 
-    private var liveLabel: String? {
-        guard let pool = vm.bundle?.pool else { return nil }
-        if pool.isActive { return "LIVE" }
-        if pool.isDrafting { return "DRAFT LÄUFT" }
-        return nil
-    }
-
-    private func poolMeta(_ b: PoolService.PoolBundle) -> some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(b.pool.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                HStack(spacing: 10) {
-                    metaItem(icon: "person.2.fill", text: "\(b.members.count)")
-                    metaItem(icon: "trophy.fill", text: "\(Int(b.pool.entryFee)) Pkt")
-                    metaItem(icon: "flag.fill", text: "Par \(b.pool.par)")
-                    if let code = b.pool.inviteCode {
-                        Button {
-                            UIPasteboard.general.string = code
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "link")
-                                    .font(.system(size: 9, weight: .semibold))
-                                Text(code)
-                                    .font(.system(size: 11, design: .monospaced))
-                            }
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Theme.accentDim)
-                            .foregroundStyle(Theme.accent)
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Theme.bg)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.border).frame(height: 1)
-        }
-    }
-
-    private func metaItem(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 9))
-            Text(text).font(.system(size: 11, weight: .medium))
-        }
-        .foregroundStyle(Theme.text2)
-    }
-
-    private var tabStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ForEach(visibleTabs, id: \.self) { tab in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
-                            proxy.scrollTo(tab, anchor: .center)
-                        } label: {
-                            VStack(spacing: 6) {
-                                Text(tab.label)
-                                    .font(.system(size: 13,
-                                                  weight: selectedTab == tab ? .semibold : .regular))
-                                    .foregroundStyle(selectedTab == tab ? Theme.accent : Theme.text2)
-                                Rectangle()
-                                    .fill(selectedTab == tab ? Theme.accent : Color.clear)
-                                    .frame(height: 2)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.top, 10)
-                        }
-                        .buttonStyle(.plain)
-                        .id(tab)
-                    }
-                }
-                .padding(.horizontal, 8)
-            }
-            .background(Theme.bg)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(Theme.border).frame(height: 1)
-            }
-        }
-    }
+    // MARK: - Content Switch
 
     @ViewBuilder
-    private func tabContent(_ b: PoolService.PoolBundle) -> some View {
-        ScrollView {
-            Group {
-                switch selectedTab {
-                case .ranking:     RankingView(vm: vm)
-                case .leaderboard: LeaderboardView(vm: vm)
-                case .stats:       StatsView(vm: vm)
-                case .draft:       DraftView(vm: vm)
-                case .picks:       PicksView(vm: vm)
-                case .payouts:     PayoutsView(vm: vm)
-                case .members:     MembersView(vm: vm)
-                case .rules:       RulesView(pool: b.pool)
-                case .admin:       AdminView(vm: vm)
+    private var content: some View {
+        if let b = vm.bundle {
+            poolTabs(b)
+        } else if let err = vm.error {
+            errorContent(err)
+        } else {
+            loadingContent
+        }
+    }
+
+    // MARK: - Loading
+
+    private var loadingContent: some View {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            ProgressView()
+        }
+        .navigationTitle("Pool")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Error
+
+    private func errorContent(_ err: String) -> some View {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Text("Fehler beim Laden")
+                    .font(.headline)
+                Text(err)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                Button("Erneut versuchen") { Task { await vm.reload() } }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+            }
+        }
+        .navigationTitle("Pool")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Pool Tabs
+
+    private func poolTabs(_ b: PoolService.PoolBundle) -> some View {
+        TabView(selection: $selectedTab) {
+            // Leaderboard — immer
+            tab(.leaderboard, icon: "flag.fill", label: "Leaderboard") {
+                LeaderboardView(vm: vm)
+            }
+
+            // Draft oder Rangliste
+            if b.pool.isDrafting {
+                tab(.draft, icon: "person.badge.plus", label: "Draft") {
+                    DraftView(vm: vm)
+                }
+            } else {
+                tab(.ranking, icon: "list.number", label: "Rangliste") {
+                    RankingView(vm: vm)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 30)
+
+            // Mitspieler — immer
+            tab(.members, icon: "person.2", label: "Mitspieler") {
+                MembersView(vm: vm)
+            }
+
+            // Aktiv/Beendet: Stats + Picks
+            if !b.pool.isLobby && !b.pool.isDrafting {
+                tab(.picks, icon: "checkmark.circle", label: "Picks") {
+                    PicksView(vm: vm)
+                }
+                tab(.stats, icon: "chart.bar", label: "Stats") {
+                    StatsView(vm: vm)
+                }
+            }
+
+            // Admin
+            if vm.iAmAdmin {
+                tab(.admin, icon: "gearshape", label: "Admin") {
+                    AdminView(vm: vm)
+                }
+            }
+        }
+        .tint(Theme.accent)
+        .navigationTitle(b.pool.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(b.pool.name)
+                        .font(.system(size: 16, weight: .semibold))
+                    if let t = b.pool.tournamentName, !t.isEmpty {
+                        Text(t)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if vm.iAmAdmin {
+                    Button { selectedTab = .admin } label: { poolStatusBadge(b.pool) }
+                        .buttonStyle(.plain)
+                } else {
+                    poolStatusBadge(b.pool)
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func tab<Content: View>(
+        _ tag: PoolTab,
+        icon: String,
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            content()
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 30)
         }
         .background(Theme.bg)
         .refreshable { await vm.reload() }
+        .tabItem { Label(label, systemImage: icon) }
+        .tag(tag)
     }
-}
 
-// Custom Back-Button weil wir die Navigation Bar verstecken
-private struct NavigationBackButton: View {
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Color.white.opacity(0.14))
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
+    private func poolStatusBadge(_ pool: Pool) -> some View {
+        let (text, color): (String, Color) = {
+            if pool.isActive  { return ("LIVE",  Theme.red) }
+            if pool.isDrafting { return ("DRAFT", Theme.accent) }
+            if pool.isFinished { return ("ENDE",  Theme.text3) }
+            return ("LOBBY", Theme.text3)
+        }()
+        return Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .tracking(0.5)
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
     }
 }

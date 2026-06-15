@@ -353,7 +353,8 @@ final class PoolService {
         name: String,
         pickable: PickableTournament?,
         entryFee: Double,
-        picksPerMember: Int
+        picksPerMember: Int,
+        pickSeconds: Int = 10800
     ) async throws -> Pool {
         guard let uid = AuthService.shared.userID else {
             throw NSError(domain: "MajorPool", code: 401,
@@ -412,7 +413,7 @@ final class PoolService {
                 cut_top: pickable?.dbTournament?.cutTop ?? 50,
                 entry_fee: entryFee,
                 picks_per_member: picksPerMember,
-                pick_seconds: 10800,
+                pick_seconds: pickSeconds,
                 status: "lobby",
                 created_by: uid.uuidString
             ))

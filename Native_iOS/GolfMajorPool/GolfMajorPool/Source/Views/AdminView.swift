@@ -19,8 +19,10 @@ struct AdminView: View {
             lifecycleCard
             orderCard
             membersCard
-            bonusCard
-            if !bonusList.isEmpty { existingBonusesCard }
+            if isMastersTournament {
+                bonusCard
+                if !bonusList.isEmpty { existingBonusesCard }
+            }
         }
     }
 
@@ -210,6 +212,11 @@ struct AdminView: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    private var isMastersTournament: Bool {
+        let name = vm.bundle?.pool.tournamentName ?? vm.bundle?.tournament?.name ?? ""
+        return name.lowercased().contains("master")
     }
 
     private var bonusList: [PoolBonus] {

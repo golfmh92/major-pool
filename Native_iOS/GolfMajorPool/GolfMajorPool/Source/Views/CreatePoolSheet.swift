@@ -11,6 +11,9 @@ struct CreatePoolSheet: View {
     @State private var selected: PickableTournament?
     @State private var entryFee: Double = 20
     @State private var picksPerMember: Int = 5
+    @State private var pickHours: Int = 3
+
+    private let pickHourOptions: [Int] = [1, 2, 3, 6, 12, 24]
     @State private var isLoading = false
     @State private var isFetchingTournaments = false
     @State private var errorMessage: String?
@@ -27,6 +30,7 @@ struct CreatePoolSheet: View {
                         tournamentSection
                         entryFeeSection
                         picksSection
+                        pickTimeSection
                         createButton
                         if let err = errorMessage {
                             Text(err)
@@ -75,10 +79,8 @@ struct CreatePoolSheet: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        noneChip
-                        ForEach(pickable) { t in
-                            chip(t)
-                        }
+                        if pickable.isEmpty { noneChip }
+                        ForEach(pickable) { t in chip(t) }
                     }
                     .padding(.vertical, 2)
                 }
@@ -87,38 +89,35 @@ struct CreatePoolSheet: View {
     }
 
     private var noneChip: some View {
-        let isSelected = selected == nil
-        return Button { selected = nil } label: {
-            Text("Kein Turnier")
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(isSelected ? Theme.accent : Theme.bg2)
-                .foregroundStyle(isSelected ? .white : Theme.text)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
+        chipLabel(line1: "Kein Turnier", line2: nil, isSelected: true)
     }
 
     private func chip(_ t: PickableTournament) -> some View {
         let isSelected = selected?.id == t.id
         return Button { selected = t } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(t.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                Text(t.tour)
-                    .font(.system(size: 10))
-                    .opacity(0.75)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(isSelected ? Theme.accent : Theme.bg2)
-            .foregroundStyle(isSelected ? .white : Theme.text)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
+            chipLabel(line1: t.name, line2: t.tour, isSelected: isSelected)
         }
         .buttonStyle(.plain)
+    }
+
+    private func chipLabel(line1: String, line2: String?, isSelected: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(line1)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(line2 ?? " ")
+                .font(.system(size: 10))
+                .opacity(line2 != nil ? 0.6 : 0)
+        }
+        .frame(width: 120, height: 54, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(isSelected ? Theme.accent : Theme.bg2)
+        .foregroundStyle(isSelected ? .white : Theme.text)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
     }
 
     private var entryFeeSection: some View {
@@ -145,42 +144,57 @@ struct CreatePoolSheet: View {
     private var picksSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             label("PICKS PRO SPIELER")
-            HStack(spacing: 0) {
-                Button {
-                    if picksPerMember > 3 { picksPerMember -= 1 }
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .foregroundStyle(picksPerMember > 3 ? Theme.accent : Theme.text3)
-                }
-                .buttonStyle(.plain)
-
+            HStack(spacing: 12) {
+                stepperButton(icon: "minus", enabled: picksPerMember > 3) { picksPerMember -= 1 }
                 Text("\(picksPerMember)")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.text)
-                    .frame(width: 50, alignment: .center)
-
-                Button {
-                    if picksPerMember < 8 { picksPerMember += 1 }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .foregroundStyle(picksPerMember < 8 ? Theme.accent : Theme.text3)
-                }
-                .buttonStyle(.plain)
-
+                    .frame(width: 36, alignment: .center)
+                stepperButton(icon: "plus", enabled: picksPerMember < 8) { picksPerMember += 1 }
                 Spacer()
-                Text("Snake-Draft — 3h pro Pick")
+                Text("Snake-Draft")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text3)
             }
-            .padding(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
         }
+    }
+
+    private var pickTimeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            label("ZEIT PRO PICK")
+            HStack(spacing: 8) {
+                ForEach(pickHourOptions, id: \.self) { h in
+                    let isSelected = pickHours == h
+                    Button { pickHours = h } label: {
+                        Text(h < 24 ? "\(h)h" : "24h")
+                            .font(.system(size: 14, weight: isSelected ? .bold : .regular))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(isSelected ? Theme.accent : Theme.bg2)
+                            .foregroundStyle(isSelected ? .white : Theme.text)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func stepperButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(enabled ? Theme.accent : Theme.text3)
+                .frame(width: 52, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private var createButton: some View {
@@ -303,7 +317,8 @@ struct CreatePoolSheet: View {
                 name: name,
                 pickable: selected,
                 entryFee: entryFee,
-                picksPerMember: picksPerMember
+                picksPerMember: picksPerMember,
+                pickSeconds: pickHours * 3600
             )
             await onCreated(pool.id)
             dismiss()

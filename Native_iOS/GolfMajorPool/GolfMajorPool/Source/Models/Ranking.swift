@@ -286,6 +286,7 @@ struct LiveGolferScore: Hashable {
     let finished: Bool
     let outStatus: String?     // "cut" / "wd" / "dq" / nil
     let teeTime: String?
+    let headshot: String?      // ESPN athlete headshot URL (optional)
 
     func round(_ r: Int) -> Int? {
         switch r { case 1: return r1; case 2: return r2; case 3: return r3; case 4: return r4; default: return nil }

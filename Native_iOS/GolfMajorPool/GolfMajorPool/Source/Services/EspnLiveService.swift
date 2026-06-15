@@ -68,6 +68,8 @@ final class EspnLiveService {
             guard let athlete = c["athlete"] as? [String: Any],
                   let displayName = athlete["displayName"] as? String else { continue }
 
+            let headshot = (athlete["headshot"] as? [String: Any])?["href"] as? String
+
             let linescores = c["linescores"] as? [[String: Any]] ?? []
             let rounds: [Int?] = (0..<4).map { idx in
                 guard idx < linescores.count else { return nil }
@@ -89,13 +91,14 @@ final class EspnLiveService {
             let position = (c["status"] as? [String: Any])?["position"] as? [String: Any]
             let posName = position?["displayName"] as? String
 
-            let scoreStr = c["score"] as? String
+            // ESPN liefert `score` mal als String, mal als Objekt {value, displayValue}.
+            // Wir wollen das To-Par (z.B. "-1", "E", "+3") aus displayValue.
+            let scoreStr: String? = (c["score"] as? String)
+                ?? ((c["score"] as? [String: Any])?["displayValue"] as? String)
             let total: Int? = {
-                if let s = scoreStr {
-                    if s == "E" { return 0 }
-                    return Int(s)
-                }
-                return nil
+                guard let s = scoreStr else { return nil }
+                if s == "E" { return 0 }
+                return Int(s.replacingOccurrences(of: "+", with: ""))
             }()
 
             let currentRound = (statusObj?["period"] as? NSNumber)?.intValue
@@ -130,7 +133,8 @@ final class EspnLiveService {
                 currentRound: currentRound,
                 finished: finished,
                 outStatus: outStatus,
-                teeTime: teeTime
+                teeTime: teeTime,
+                headshot: headshot
             )
         }
         return out

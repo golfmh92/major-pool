@@ -71,7 +71,7 @@ struct AuthView: View {
 
     private var logo: some View {
         VStack(spacing: 8) {
-            Text("MAJOR POOL")
+            Text("PIN POINTS")
                 .font(.custom(Theme.displayFont, size: 42))
                 .tracking(4)
                 .foregroundStyle(Theme.accent)

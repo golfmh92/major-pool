@@ -3,6 +3,8 @@ import SwiftUI
 struct MembersView: View {
     @Bindable var vm: PoolDetailViewModel
     @Environment(AuthService.self) private var auth
+    @State private var copied = false
+    @State private var showShare = false
 
     private var rows: [Row] {
         guard let b = vm.bundle else { return [] }
@@ -18,6 +20,11 @@ struct MembersView: View {
             .sorted { ($0.member.draftPosition ?? 999) < ($1.member.draftPosition ?? 999) }
     }
 
+    private var shareText: String {
+        guard let b = vm.bundle, let code = b.pool.inviteCode else { return "" }
+        return "Tritt meinem Pin Points Pool bei 🏆\n\"\(b.pool.name)\" · Code: \(code)\n\nPin Points App → Beitreten → Code eingeben"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -27,20 +34,42 @@ struct MembersView: View {
                     .foregroundStyle(Theme.text3)
                 Spacer()
                 if let code = vm.bundle?.pool.inviteCode {
-                    Button { UIPasteboard.general.string = code } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Code: \(code)")
-                                .font(.system(size: 12, design: .monospaced))
+                    HStack(spacing: 6) {
+                        // Code kopieren
+                        Button {
+                            UIPasteboard.general.string = code
+                            copied = true
+                            Task { try? await Task.sleep(nanoseconds: 1_800_000_000); copied = false }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(code)
+                                    .font(.system(size: 12, design: .monospaced))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(copied ? Theme.greenDim : Theme.accentDim)
+                            .foregroundStyle(copied ? Theme.green : Theme.accent)
+                            .clipShape(Capsule())
+                            .animation(.easeInOut(duration: 0.2), value: copied)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Theme.accentDim)
-                        .foregroundStyle(Theme.accent)
-                        .clipShape(Capsule())
+                        .buttonStyle(.plain)
+                        // Teilen
+                        Button { showShare = true } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Theme.accent)
+                                .frame(width: 32, height: 32)
+                                .background(Theme.accentDim)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .sheet(isPresented: $showShare) {
+                            ShareSheet(text: shareText)
+                                .presentationDetents([.medium, .large])
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.bottom, 2)

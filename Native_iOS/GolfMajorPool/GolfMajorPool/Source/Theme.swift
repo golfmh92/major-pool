@@ -108,7 +108,7 @@ struct MajorPoolHeader: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 4) {
-                Text("MAJOR POOL")
+                Text("PIN POINTS")
                     .font(.custom(Theme.displayFont, size: 32))
                     .tracking(4)
                     .foregroundStyle(.white)

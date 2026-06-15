@@ -13,9 +13,7 @@ struct PoolListView: View {
     @State private var showCreateSheet = false
     @State private var showAccountSheet = false
     @State private var autoOpenPoolID: UUID?
-
-    /// `nil` solange Liste noch nie geladen — verhindert Empty-State-Flicker beim Start.
-    private var firstLoadDone: Bool { !isLoading || !pools.isEmpty || loadError != nil }
+    @State private var initialLoadDone = false
 
     var body: some View {
         NavigationStack {
@@ -23,21 +21,11 @@ struct PoolListView: View {
                 Theme.bg.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    MajorPoolHeader(subtitle: "MEINE POOLS")
-                        .overlay(alignment: .topTrailing) {
-                            Button { showAccountSheet = true } label: {
-                                Image(systemName: "person.crop.circle")
-                                    .font(.system(size: 22, weight: .regular))
-                                    .foregroundStyle(.white.opacity(0.85))
-                                    .frame(width: 40, height: 40)
-                            }
-                            .padding(.trailing, 8)
-                            .padding(.top, 18)
-                        }
+                    brandHeader
 
                     ScrollView {
                         VStack(spacing: 12) {
-                            headerRow
+                            sectionBar
 
                             if isLoading && pools.isEmpty {
                                 ProgressView().padding(.top, 60)
@@ -57,6 +45,7 @@ struct PoolListView: View {
                             }
                         }
                         .padding(.horizontal, 16)
+                        .padding(.top, 18)
                         .padding(.bottom, 30)
                     }
                 }
@@ -71,9 +60,13 @@ struct PoolListView: View {
                 ) { EmptyView() }
                 .hidden()
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(autoOpen: false) }
-            .task { await load(autoOpen: true) }
+            .task {
+                guard !initialLoadDone else { return }
+                initialLoadDone = true
+                await load(autoOpen: false)
+            }
             .sheet(isPresented: $showJoinSheet) {
                 JoinPoolSheet { await load(autoOpen: true) }
             }
@@ -89,7 +82,39 @@ struct PoolListView: View {
         }
     }
 
-    private var headerRow: some View {
+    // MARK: - Brand Header
+
+    private var brandHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PIN POINTS")
+                    .font(.custom(Theme.displayFont, size: 30))
+                    .tracking(3)
+                    .foregroundStyle(.white)
+                Text("DRAFT · WATCH · WIN")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(4)
+                    .foregroundStyle(Theme.red)
+            }
+            Spacer()
+            Button { showAccountSheet = true } label: {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity)
+        .background(Theme.headerGradient.ignoresSafeArea(edges: .top))
+        .overlay(alignment: .bottom) {
+            Theme.headerAccentStripe.frame(height: 3)
+        }
+    }
+
+    private var sectionBar: some View {
         HStack {
             Text("DEINE POOLS")
                 .font(.system(size: 11, weight: .bold))
@@ -128,21 +153,26 @@ struct PoolListView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.top, 18)
-        .padding(.bottom, 4)
     }
 
     @ViewBuilder private var emptyState: some View {
         VStack(spacing: 14) {
-            Text("🏌️").font(.system(size: 56))
+            ZStack {
+                Circle()
+                    .fill(Theme.accentDim)
+                    .frame(width: 84, height: 84)
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(Theme.accent)
+            }
             Text("Noch keinem Pool beigetreten")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.text)
-            Text("Tippe oben rechts auf **Beitreten** und gib einen Invite-Code ein. Den bekommst du von dem Freund, der den Pool erstellt hat.")
+            Text("Tippe auf **Beitreten** und gib einen Invite-Code ein. Den bekommst du von dem Freund, der den Pool erstellt hat — oder erstelle selbst einen.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 12)
             Button { showJoinSheet = true } label: {
                 Text("Mit Code beitreten")
                     .font(.system(size: 14, weight: .semibold))
@@ -155,8 +185,11 @@ struct PoolListView: View {
             .buttonStyle(.plain)
             .padding(.top, 6)
         }
-        .padding(.top, 40)
-        .padding(.bottom, 60)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+        .cardStyle()
+        .padding(.top, 30)
     }
 
     @ViewBuilder private func errorBox(_ err: String) -> some View {
@@ -196,8 +229,9 @@ private struct PoolCard: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Theme.accent)
+                    .fill(Theme.headerGradient)
                     .frame(width: 48, height: 48)
+                    .shadow(color: Theme.accent.opacity(0.3), radius: 4, x: 0, y: 2)
                 Image(systemName: "trophy.fill")
                     .foregroundStyle(.white)
                     .font(.system(size: 19))

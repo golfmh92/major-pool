@@ -4,6 +4,7 @@ import SwiftUI
 /// PWA-Pendant: `renderLeaderboardTab` (Zeile ~3194). Favoriten werden im UserDefaults gespeichert.
 struct LeaderboardView: View {
     @Bindable var vm: PoolDetailViewModel
+    @Environment(AuthService.self) private var auth
 
     @State private var search: String = ""
     @State private var showOnlyFavorites: Bool = false
@@ -15,6 +16,7 @@ struct LeaderboardView: View {
         let live: LiveGolferScore?
         let tg: TournamentGolfer?
         let ownerName: String?
+        let isMine: Bool
         let status: GolferStatus
         let total: Int?    // to-Par (live.total oder summe der to-Par-rounds)
     }
@@ -50,14 +52,16 @@ struct LeaderboardView: View {
             }()
 
             var ownerName: String? = nil
+            var isMine = false
             if let pick = picksByName[key], let mid = pick.memberId, let m = memberByID[mid] {
                 if let uid = m.userId, let u = userByID[uid] { ownerName = u.name }
                 else if let dn = m.displayName, !dn.isEmpty { ownerName = dn }
                 else { ownerName = "Platzhalter" }
+                if let uid = m.userId, uid == auth.userID { isMine = true }
             }
 
             return Row(id: key, displayName: name, live: live, tg: tg,
-                       ownerName: ownerName, status: status, total: total)
+                       ownerName: ownerName, isMine: isMine, status: status, total: total)
         }
         .filter { row in
             if showOnlyFavorites, !favorites.contains(row.id) { return false }
@@ -86,7 +90,7 @@ struct LeaderboardView: View {
             if rows.isEmpty {
                 emptyState
             } else {
-                VStack(spacing: 6) {
+                LazyVStack(spacing: 8) {
                     ForEach(rows) { r in
                         GolferRow(row: r,
                                   isFavorite: favorites.contains(r.id),
@@ -176,56 +180,113 @@ private struct GolferRow: View {
     let isFavorite: Bool
     let toggleFav: () -> Void
 
-    var body: some View {
-        HStack(spacing: 10) {
-            Button(action: toggleFav) {
-                Image(systemName: isFavorite ? "star.fill" : "star")
-                    .foregroundStyle(isFavorite ? Theme.red : Theme.text3)
-                    .font(.system(size: 16))
-            }
-            .buttonStyle(.plain)
+    private var isCut: Bool { row.status != .active }
 
+    private var positionText: String {
+        let p = (row.live?.position ?? row.tg?.position ?? "").trimmingCharacters(in: .whitespaces)
+        return (p == "-" || p == "--") ? "" : p
+    }
+
+    private var headshotURL: URL? {
+        guard let s = row.live?.headshot, !s.isEmpty else { return nil }
+        return URL(string: s)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Position links (Display-Font)
+            Text(positionText)
+                .font(.custom(Theme.displayFont, size: 20))
+                .foregroundStyle(Theme.text3)
+                .frame(width: 40, alignment: .center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+
+            avatar
+
+            // Name + Owner
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(row.displayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(row.status == .active ? Theme.text : Theme.text3)
-                        .strikethrough(row.status != .active)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isCut ? Theme.text3 : Theme.text)
+                        .strikethrough(isCut)
                         .lineLimit(1)
-                    if row.status != .active {
+                    if isCut {
                         Text(Fmt.statusLabel(row.status))
                             .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Fmt.statusColor(row.status).opacity(0.15))
-                            .foregroundStyle(Fmt.statusColor(row.status))
-                            .clipShape(Capsule())
+                            .foregroundStyle(Theme.red)
                     }
                 }
-                HStack(spacing: 6) {
-                    if let pos = row.live?.position ?? row.tg?.position {
-                        Text(pos).font(.system(size: 10)).foregroundStyle(Theme.text3)
-                    }
-                    if let thru = row.live?.thru {
-                        Text(thru).font(.system(size: 10)).foregroundStyle(Theme.text3)
-                    } else if let tee = row.live?.teeTime {
-                        Text("Tee \(tee)").font(.system(size: 10)).foregroundStyle(Theme.text3)
-                    }
-                    if let owner = row.ownerName {
-                        Text("· \(owner)").font(.system(size: 10)).foregroundStyle(Theme.accent)
-                    }
+                if let owner = row.ownerName {
+                    Text(owner)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
                 }
             }
-            Spacer()
+
+            Spacer(minLength: 6)
+
+            if let thru = row.live?.thru, !thru.isEmpty, !isCut, row.total != nil {
+                Text(thru)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.text3)
+            }
+
+            // Score rechts (Display-Font, farbig)
             Text(Fmt.score(row.total))
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.custom(Theme.displayFont, size: 22))
                 .foregroundStyle(Fmt.scoreColor(row.total))
+                .frame(minWidth: 42, alignment: .trailing)
+
+            // Favoriten-Stern rechts
+            Button(action: toggleFav) {
+                Image(systemName: isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isFavorite ? Theme.red : Theme.text3)
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(row.ownerName != nil ? Theme.accentDim : Theme.card)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Theme.card)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(row.isMine ? Theme.accent : Theme.border,
+                        lineWidth: row.isMine ? 2 : 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .opacity(isCut ? 0.55 : 1)
+    }
+
+    @ViewBuilder private var avatar: some View {
+        if let url = headshotURL {
+            AsyncImage(url: url) { phase in
+                if case .success(let img) = phase {
+                    img.resizable().scaledToFill()
+                } else {
+                    initialsBubble
+                }
+            }
+            .frame(width: 30, height: 30)
+            .clipShape(Circle())
+        } else {
+            initialsBubble
+        }
+    }
+
+    private var initialsBubble: some View {
+        Circle()
+            .fill(Theme.bg2)
+            .frame(width: 30, height: 30)
+            .overlay(
+                Text(Fmt.initials(row.displayName))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.text3)
+            )
     }
 }
 
